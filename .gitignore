@@ -1,0 +1,21 @@
+# Vendored tooling — not part of the feature change-set
+.specify/
+.opencode/
+.agents/
+
+# Secrets — REQ-NF-004: supplied via gitignored .env
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Runtime state (REQ-NF-007 run records, REQ-005 clone cache)
+.runs/
+.cache/

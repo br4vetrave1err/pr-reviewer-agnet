@@ -1,0 +1,10 @@
+# ngrok tunnel config (REQ-CN-001).
+# Maps the app service to a public HTTPS URL that GitHub webhooks can reach.
+# The webhook URL registered on GitHub is re-pointed at this URL on change.
+
+version: "3"
+tunnels:
+  webhook:
+    proto: http
+    addr: app:8080
+    inspect: false

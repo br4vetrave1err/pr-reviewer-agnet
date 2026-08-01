@@ -1,0 +1,53 @@
+# PR Review Agent compose stack (REQ-CN-001): app + ngrok tunnel sidecar.
+# Secrets come from the gitignored .env via env_file (REQ-NF-004).
+#
+# Usage: docker compose up --build
+# The webhook URL is the ngrok tunnel's public URL; registration self-heals
+# on tunnel changes.
+
+services:
+  app:
+    build: .
+    image: pr-reviewer-agent:local
+    env_file:
+      - .env
+    environment:
+      - WEBHOOK_SECRET
+      - GITHUB_TOKEN
+      - OPENCODE_GO_TOKEN
+      - PR_REVIEWER_ACCOUNT
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./specs:/app/specs:ro
+      - ./docker:/app/docker:ro
+      - agent_cache:/var/agent_cache
+      - agent_runs:/app/.runs
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/webhook', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # REQ-CN-001: ngrok tunnel sidecar exposes the app at a public URL that
+  # GitHub can reach. The registered webhook URL is re-pointed at the tunnel's
+  # current public URL on change.
+  ngrok:
+    image: ngrok/ngrok:latest
+    env_file:
+      - .env
+    environment:
+      - NGROK_AUTHTOKEN
+      - NGROK_CONFIG=/etc/ngrok.yml
+    volumes:
+      - ./docker/ngrok.yml:/etc/ngrok.yml:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  agent_cache:
+  agent_runs:
