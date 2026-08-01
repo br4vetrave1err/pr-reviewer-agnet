@@ -1,7 +1,7 @@
-﻿# Traceability Matrix
+# Traceability Matrix
 
-**Generated**: 2026-07-31
-**Source**: `E:\projects\pr-reviewer-agnet\specs\001-pr-reviewer-agent\v-model/`
+**Generated**: 2026-08-01
+**Source**: `specs\001-pr-reviewer-agent\v-model/`
 
 ## Matrix A — Validation (User View)
 
@@ -22,7 +22,7 @@
 | | | ATP-005-A | Clone, update, evict | SCN-005-A3 | ⬜ Untested |
 | **REQ-006** | The system SHALL load per-repo documentation from this repo's `specs/<owner>/<repo>/` tree and SHALL pass it to the agent as review context; a missing folder SHALL result in a review-without-docs that records the degradation. | ATP-006-A | Docs loaded; graceful degradation | SCN-006-A1 | ⬜ Untested |
 | | | ATP-006-A | Docs loaded; graceful degradation | SCN-006-A2 | ⬜ Untested |
-| **REQ-007** | The system SHALL run the review agent by spawning a one-off `opencode run` subprocess in the checkout (read-only), with repo `AGENTS.md`, `.opencode/` skills, vendored `.agents/skills/`, and the defined `agent_skill_set`; a structured-JSON output contract is used, with no HTTP daemon. | ATP-007-A | Skills availability | SCN-007-A1 | ⬜ Untested |
+| **REQ-007** | The system SHALL run the review agent by spawning a one-off `opencode run` subprocess in the checkout (read-only), with repo `AGENTS.md`, `.opencode/` skills, vendored `.agents/skills/`, and minimal defined `agent_skill_set`; a structured-JSON output contract is used, with no HTTP daemon. | ATP-007-A | Skills availability | SCN-007-A1 | ⬜ Untested |
 | | | ATP-007-A | Skills availability | SCN-007-A2 | ⬜ Untested |
 | **REQ-008** | The system SHALL perform PR scope validation (ensuring changed files strictly pertain to PR details/linked issues) and test compliance verification (test additions matching repo rules in `AGENTS.md` / `.opencode/`). The container SHALL NOT execute the target repo's test suites; "test results" are CI status plus compliance findings. | ATP-008-A | Compliance validated; suites NOT executed | SCN-008-A1 | ⬜ Untested |
 | | | ATP-008-A | Compliance validated; suites NOT executed | SCN-008-A2 | ⬜ Untested |
@@ -53,7 +53,7 @@
 | | | ATP-017-A | Agent skill set as review base | SCN-017-A4 | ⬜ Untested |
 | **REQ-CN-001** | The system MUST run inside Docker on the user's machine as a compose stack (app + `ngrok/ngrok` sidecar), with the GitHub webhook URL pointing at the tunnel's current public URL (self-healed on change). | ATP-CN-001-A | Docker compose brings it up | SCN-CN-001-A1 | ⬜ Untested |
 | **REQ-CN-002** | The container image MUST include Python 3.11+, the opencode CLI (npm-installed), git, and gitleaks. | ATP-CN-002-A | Required CLIs present | SCN-CN-002-A1 | ⬜ Untested |
-| **REQ-CN-003** | The review agent SHALL use self-contained `agent_skill_set` without requiring external global skill mounts. | ATP-CN-003-A | Skills present in image | SCN-CN-003-A1 | ⬜ Untested |
+| **REQ-CN-003** | The review agent SHALL use self-contained `agent_skill_set` without requiring external global skill mounts. | ATP-CN-003-A | Skills directory present in image | SCN-CN-003-A1 | ⬜ Untested |
 | **REQ-CN-004** | The agent MUST NOT push or commit to any reviewed repository; all review operations are read-only with respect to the target repo. | ATP-CN-004-A | No writes to reviewed repos | SCN-CN-004-A1 | ⬜ Untested |
 | **REQ-IF-001** | The system SHALL use the GitHub REST API (PAT with `repo` scope) to read PRs, PR diffs, CI/CD check logs, create comments, submit reviews, and manage per-repo webhooks. | ATP-IF-001-A | REST operations succeed | SCN-IF-001-A1 | ⬜ Untested |
 | **REQ-IF-002** | The webhook endpoint SHALL accept `POST` JSON payloads at `/api/webhook` and SHALL reject invalid signatures with HTTP 401. | ATP-IF-002-A | Endpoint rejects invalid signatures | SCN-IF-002-A1 | ⬜ Untested |
@@ -62,7 +62,7 @@
 | | | ATP-IF-004-A | YAML config validated | SCN-IF-004-A2 | ⬜ Untested |
 | **REQ-IF-005** | The SQLite state database SHALL expose a documented schema: `review_runs`, `repos`, `model_aliases`, `repo_config`. | ATP-IF-005-A | State schema honored | SCN-IF-005-A1 | ⬜ Untested |
 | **REQ-IF-006** | The docs SHALL live in this repo's `specs/<owner>/<repo>/` tree, containing markdown docs consumed as review context. | ATP-IF-006-A | owner/repo folder mapping | SCN-IF-006-A1 | ⬜ Untested |
-| **REQ-NF-001** | The system SHALL run as a long-lived Docker service with graceful shutdown and restart-safe state recovery (no lost dedup state, no duplicated work after restart). | ATP-NF-001-A | Continuous service with safe restart | SCN-NF-001-A1 | ⬜ Untested |
+| **REQ-NF-001** | The system SHALL run as a long-lived Docker service with graceful shutdown and restart-safe state recovery. | ATP-NF-001-A | Continuous service with safe restart | SCN-NF-001-A1 | ⬜ Untested |
 | **REQ-NF-002** | The webhook endpoint SHALL acknowledge delivery within 2 seconds; all review processing SHALL happen asynchronously via a queue. | ATP-NF-002-A | Sub-2s acknowledgment | SCN-NF-002-A1 | ⬜ Untested |
 | **REQ-NF-003** | The system SHALL respect GitHub API rate limits (single PAT, backoff and retry on 403/429, exponential backoff with jitter). | ATP-NF-003-A | Backoff on 403/429 | SCN-NF-003-A1 | ⬜ Untested |
 | **REQ-NF-004** | The system SHALL keep all secrets (PAT, webhook secret, model provider keys) out of the repository, out of logs, and out of review output; secrets SHALL be supplied via a gitignored `.env` delivered with `env_file`, and the container SHALL construct opencode's `auth.json` from the `OPENCODE_GO_TOKEN` value at boot. | ATP-NF-004-A | No secrets in repo, logs, or output | SCN-NF-004-A1 | ⬜ Untested |
@@ -76,7 +76,7 @@
 |--------|-------|
 | **Total Requirements** | 34 |
 | **Total Test Cases (ATP)** | 35 |
-| **Total Scenarios (SCN)** | 61 |
+| **Total Scenarios (SCN)** | 62 |
 | **REQ -> ATP Coverage** | 34/34 (100%) |
 | **ATP -> SCN Coverage** | 35/35 (100%) |
 
@@ -87,6 +87,9 @@
 | **REQ-001** | SYS-001 | Webhook Receiver | STP-001-A | Interface Contract Testing | STS-001-A1 | ⬜ Untested |
 | | SYS-001 | Webhook Receiver | STP-001-A | Interface Contract Testing | STS-001-A2 | ⬜ Untested |
 | | SYS-001 | Webhook Receiver | STP-001-B | Fault Injection | STS-001-B1 | ⬜ Untested |
+| | SYS-002 | Trigger Filter | STP-002-A | Equivalence Partitioning | STS-002-A1 | ⬜ Untested |
+| | SYS-002 | Trigger Filter | STP-002-A | Equivalence Partitioning | STS-002-A2 | ⬜ Untested |
+| | SYS-002 | Trigger Filter | STP-002-A | Equivalence Partitioning | STS-002-A3 | ⬜ Untested |
 | **REQ-002** | SYS-002 | Trigger Filter | STP-002-A | Equivalence Partitioning | STS-002-A1 | ⬜ Untested |
 | | SYS-002 | Trigger Filter | STP-002-A | Equivalence Partitioning | STS-002-A2 | ⬜ Untested |
 | | SYS-002 | Trigger Filter | STP-002-A | Equivalence Partitioning | STS-002-A3 | ⬜ Untested |
@@ -107,22 +110,25 @@
 | **REQ-007** | SYS-006 | Review Executor | STP-006-A | Interface Contract Testing | STS-006-A1 | ⬜ Untested |
 | | SYS-006 | Review Executor | STP-006-A | Interface Contract Testing | STS-006-A2 | ⬜ Untested |
 | | SYS-006 | Review Executor | STP-006-A | Interface Contract Testing | STS-006-A3 | ⬜ Untested |
+| | SYS-006 | Review Executor | STP-006-B | Equivalence Partitioning | STS-006-B1 | ⬜ Untested |
+| | SYS-006 | Review Executor | STP-006-B | Equivalence Partitioning | STS-006-B2 | ⬜ Untested |
 | **REQ-008** | SYS-007 | PR Scope & Test Compliance Validator | STP-007-A | Equivalence Partitioning | STS-007-A1 | ⬜ Untested |
 | | SYS-007 | PR Scope & Test Compliance Validator | STP-007-A | Equivalence Partitioning | STS-007-A2 | ⬜ Untested |
 | | SYS-007 | PR Scope & Test Compliance Validator | STP-007-A | Equivalence Partitioning | STS-007-A3 | ⬜ Untested |
-| **REQ-009** | SYS-008 | Scanner & CI Debugger | STP-008-A | Interface Contract Testing | STS-008-A1 | ⬜ Untested |
-| | SYS-008 | Scanner & CI Debugger | STP-008-A | Interface Contract Testing | STS-008-A2 | ⬜ Untested |
-| | SYS-008 | Scanner & CI Debugger | STP-008-A | Interface Contract Testing | STS-008-A3 | ⬜ Untested |
-| **REQ-010** | SYS-006 | Review Executor | STP-006-B | Equivalence Partitioning | STS-006-B1 | ⬜ Untested |
-| | SYS-006 | Review Executor | STP-006-B | Equivalence Partitioning | STS-006-B2 | ⬜ Untested |
-| **REQ-011** | SYS-009 | Report Publisher | STP-009-A | Interface Contract Testing | STS-009-A1 | ⬜ Untested |
-| | SYS-009 | Report Publisher | STP-009-A | Interface Contract Testing | STS-009-A2 | ⬜ Untested |
-| **REQ-012** | SYS-003 | Review Coordinator | STP-003-A | Interface Contract Testing | STS-003-A1 | ⬜ Untested |
+| **REQ-009** | SYS-008 | Security Scan & CI Failure Debugger | STP-008-A | Interface Contract Testing | STS-008-A1 | ⬜ Untested |
+| | SYS-008 | Security Scan & CI Failure Debugger | STP-008-A | Interface Contract Testing | STS-008-A2 | ⬜ Untested |
+| | SYS-008 | Security Scan & CI Failure Debugger | STP-008-A | Interface Contract Testing | STS-008-A3 | ⬜ Untested |
+| **REQ-010** | SYS-003 | Review Coordinator | STP-003-A | Interface Contract Testing | STS-003-A1 | ⬜ Untested |
 | | SYS-003 | Review Coordinator | STP-003-A | Interface Contract Testing | STS-003-A2 | ⬜ Untested |
 | | SYS-003 | Review Coordinator | STP-003-A | Interface Contract Testing | STS-003-A3 | ⬜ Untested |
 | | SYS-003 | Review Coordinator | STP-003-B | Equivalence Partitioning | STS-003-B1 | ⬜ Untested |
 | | SYS-003 | Review Coordinator | STP-003-B | Equivalence Partitioning | STS-003-B2 | ⬜ Untested |
-| | SYS-009 | Report Publisher | STP-009-A | Interface Contract Testing | STS-009-A1 | ⬜ Untested |
+| | SYS-008 | Security Scan & CI Failure Debugger | STP-008-A | Interface Contract Testing | STS-008-A1 | ⬜ Untested |
+| | SYS-008 | Security Scan & CI Failure Debugger | STP-008-A | Interface Contract Testing | STS-008-A2 | ⬜ Untested |
+| | SYS-008 | Security Scan & CI Failure Debugger | STP-008-A | Interface Contract Testing | STS-008-A3 | ⬜ Untested |
+| **REQ-011** | SYS-009 | Report Publisher | STP-009-A | Interface Contract Testing | STS-009-A1 | ⬜ Untested |
+| | SYS-009 | Report Publisher | STP-009-A | Interface Contract Testing | STS-009-A2 | ⬜ Untested |
+| **REQ-012** | SYS-009 | Report Publisher | STP-009-A | Interface Contract Testing | STS-009-A1 | ⬜ Untested |
 | | SYS-009 | Report Publisher | STP-009-A | Interface Contract Testing | STS-009-A2 | ⬜ Untested |
 | **REQ-013** | SYS-010 | Model Registry | STP-010-A | Equivalence Partitioning | STS-010-A1 | ⬜ Untested |
 | | SYS-010 | Model Registry | STP-010-A | Equivalence Partitioning | STS-010-A2 | ⬜ Untested |
@@ -147,6 +153,8 @@
 | **REQ-017** | SYS-006 | Review Executor | STP-006-A | Interface Contract Testing | STS-006-A1 | ⬜ Untested |
 | | SYS-006 | Review Executor | STP-006-A | Interface Contract Testing | STS-006-A2 | ⬜ Untested |
 | | SYS-006 | Review Executor | STP-006-A | Interface Contract Testing | STS-006-A3 | ⬜ Untested |
+| | SYS-006 | Review Executor | STP-006-B | Equivalence Partitioning | STS-006-B1 | ⬜ Untested |
+| | SYS-006 | Review Executor | STP-006-B | Equivalence Partitioning | STS-006-B2 | ⬜ Untested |
 | **REQ-CN-001** | SYS-013 | Config Manager | STP-013-A | Interface Contract Testing | STS-013-A1 | ⬜ Untested |
 | | SYS-013 | Config Manager | STP-013-A | Interface Contract Testing | STS-013-A2 | ⬜ Untested |
 | | SYS-013 | Config Manager | STP-013-A | Interface Contract Testing | STS-013-A3 | ⬜ Untested |
@@ -157,6 +165,8 @@
 | **REQ-CN-003** | SYS-006 | Review Executor | STP-006-A | Interface Contract Testing | STS-006-A1 | ⬜ Untested |
 | | SYS-006 | Review Executor | STP-006-A | Interface Contract Testing | STS-006-A2 | ⬜ Untested |
 | | SYS-006 | Review Executor | STP-006-A | Interface Contract Testing | STS-006-A3 | ⬜ Untested |
+| | SYS-006 | Review Executor | STP-006-B | Equivalence Partitioning | STS-006-B1 | ⬜ Untested |
+| | SYS-006 | Review Executor | STP-006-B | Equivalence Partitioning | STS-006-B2 | ⬜ Untested |
 | **REQ-CN-004** | SYS-014 | Runtime & Observability | STP-014-A | Interface Contract Testing | STS-014-A1 | ⬜ Untested |
 | | SYS-014 | Runtime & Observability | STP-014-A | Interface Contract Testing | STS-014-A2 | ⬜ Untested |
 | | SYS-014 | Runtime & Observability | STP-014-A | Interface Contract Testing | STS-014-A3 | ⬜ Untested |
@@ -169,6 +179,8 @@
 | **REQ-IF-003** | SYS-006 | Review Executor | STP-006-A | Interface Contract Testing | STS-006-A1 | ⬜ Untested |
 | | SYS-006 | Review Executor | STP-006-A | Interface Contract Testing | STS-006-A2 | ⬜ Untested |
 | | SYS-006 | Review Executor | STP-006-A | Interface Contract Testing | STS-006-A3 | ⬜ Untested |
+| | SYS-006 | Review Executor | STP-006-B | Equivalence Partitioning | STS-006-B1 | ⬜ Untested |
+| | SYS-006 | Review Executor | STP-006-B | Equivalence Partitioning | STS-006-B2 | ⬜ Untested |
 | **REQ-IF-004** | SYS-013 | Config Manager | STP-013-A | Interface Contract Testing | STS-013-A1 | ⬜ Untested |
 | | SYS-013 | Config Manager | STP-013-A | Interface Contract Testing | STS-013-A2 | ⬜ Untested |
 | | SYS-013 | Config Manager | STP-013-A | Interface Contract Testing | STS-013-A3 | ⬜ Untested |
@@ -225,23 +237,23 @@
 |------------------------|-------------|---------------------------|-------------|--------------------|-----------|--------------------|--------|
 | SYS-001 (REQ-001, REQ-IF-002, REQ-NF-002) | REQ-001, REQ-IF-002, REQ-NF-002 | ARCH-001 | Webhook Server | ITP-001-A | Top-Down | ITS-001-A1 | ⬜ Untested |
 | SYS-001 (REQ-001, REQ-IF-002, REQ-NF-002) | REQ-001, REQ-IF-002, REQ-NF-002 | ARCH-001 | Webhook Server | ITP-001-A | Top-Down | ITS-001-A2 | ⬜ Untested |
-| SYS-002 (REQ-002, REQ-003) | REQ-002, REQ-003 | ARCH-002 | Trigger & Command Filter | ITP-002-A | Bottom-Up | ITS-002-A1 | ⬜ Untested |
-| SYS-002 (REQ-002, REQ-003) | REQ-002, REQ-003 | ARCH-002 | Trigger & Command Filter | ITP-002-A | Bottom-Up | ITS-002-A2 | ⬜ Untested |
-| SYS-003 (REQ-004, REQ-012, REQ-014, REQ-NF-005, REQ-NF-006) | REQ-004, REQ-012, REQ-014, REQ-NF-005, REQ-NF-006 | ARCH-003 | Queue & Scheduler | ITP-003-A | Big-Bang | ITS-003-A1 | ⬜ Untested |
-| SYS-003 (REQ-004, REQ-012, REQ-014, REQ-NF-005, REQ-NF-006) | REQ-004, REQ-012, REQ-014, REQ-NF-005, REQ-NF-006 | ARCH-003 | Queue & Scheduler | ITP-003-A | Big-Bang | ITS-003-A2 | ⬜ Untested |
-| SYS-003 (REQ-004, REQ-012, REQ-014, REQ-NF-005, REQ-NF-006) | REQ-004, REQ-012, REQ-014, REQ-NF-005, REQ-NF-006 | ARCH-003 | Queue & Scheduler | ITP-003-B | Bottom-Up | ITS-003-B1 | ⬜ Untested |
-| SYS-003 (REQ-004, REQ-012, REQ-014, REQ-NF-005, REQ-NF-006) | REQ-004, REQ-012, REQ-014, REQ-NF-005, REQ-NF-006 | ARCH-003 | Queue & Scheduler | ITP-003-B | Bottom-Up | ITS-003-B2 | ⬜ Untested |
+| SYS-002 (REQ-001, REQ-002, REQ-003) | REQ-001, REQ-002, REQ-003 | ARCH-002 | Trigger & Command Filter | ITP-002-A | Bottom-Up | ITS-002-A1 | ⬜ Untested |
+| SYS-002 (REQ-001, REQ-002, REQ-003) | REQ-001, REQ-002, REQ-003 | ARCH-002 | Trigger & Command Filter | ITP-002-A | Bottom-Up | ITS-002-A2 | ⬜ Untested |
+| SYS-003 (REQ-004, REQ-010, REQ-014, REQ-NF-005, REQ-NF-006) | REQ-004, REQ-010, REQ-014, REQ-NF-005, REQ-NF-006 | ARCH-003 | Queue & Scheduler | ITP-003-A | Big-Bang | ITS-003-A1 | ⬜ Untested |
+| SYS-003 (REQ-004, REQ-010, REQ-014, REQ-NF-005, REQ-NF-006) | REQ-004, REQ-010, REQ-014, REQ-NF-005, REQ-NF-006 | ARCH-003 | Queue & Scheduler | ITP-003-A | Big-Bang | ITS-003-A2 | ⬜ Untested |
+| SYS-003 (REQ-004, REQ-010, REQ-014, REQ-NF-005, REQ-NF-006) | REQ-004, REQ-010, REQ-014, REQ-NF-005, REQ-NF-006 | ARCH-003 | Queue & Scheduler | ITP-003-B | Bottom-Up | ITS-003-B1 | ⬜ Untested |
+| SYS-003 (REQ-004, REQ-010, REQ-014, REQ-NF-005, REQ-NF-006) | REQ-004, REQ-010, REQ-014, REQ-NF-005, REQ-NF-006 | ARCH-003 | Queue & Scheduler | ITP-003-B | Bottom-Up | ITS-003-B2 | ⬜ Untested |
 | SYS-004 (REQ-005) | REQ-005 | ARCH-004 | Repo Clone Cache | ITP-004-A | Bottom-Up | ITS-004-A1 | ⬜ Untested |
 | SYS-004 (REQ-005) | REQ-005 | ARCH-004 | Repo Clone Cache | ITP-004-A | Bottom-Up | ITS-004-A2 | ⬜ Untested |
 | SYS-005 (REQ-006, REQ-IF-006) | REQ-006, REQ-IF-006 | ARCH-005 | Docs Provider | ITP-005-A | Top-Down | ITS-005-A1 | ⬜ Untested |
 | SYS-005 (REQ-006, REQ-IF-006) | REQ-006, REQ-IF-006 | ARCH-005 | Docs Provider | ITP-005-A | Top-Down | ITS-005-A2 | ⬜ Untested |
-| SYS-006 (REQ-007, REQ-010, REQ-017, REQ-IF-003, REQ-CN-003) | REQ-007, REQ-010, REQ-017, REQ-IF-003, REQ-CN-003 | ARCH-006 | Workspace Runner | ITP-006-A | Bottom-Up | ITS-006-A1 | ⬜ Untested |
-| SYS-006 (REQ-007, REQ-010, REQ-017, REQ-IF-003, REQ-CN-003) | REQ-007, REQ-010, REQ-017, REQ-IF-003, REQ-CN-003 | ARCH-006 | Workspace Runner | ITP-006-A | Bottom-Up | ITS-006-A2 | ⬜ Untested |
-| SYS-006 (REQ-007, REQ-010, REQ-017, REQ-IF-003, REQ-CN-003) | REQ-007, REQ-010, REQ-017, REQ-IF-003, REQ-CN-003 | ARCH-006 | Workspace Runner | ITP-006-A | Bottom-Up | ITS-006-A3 | ⬜ Untested |
+| SYS-006 (REQ-007, REQ-017, REQ-IF-003, REQ-CN-003) | REQ-007, REQ-017, REQ-IF-003, REQ-CN-003 | ARCH-006 | Workspace Runner | ITP-006-A | Bottom-Up | ITS-006-A1 | ⬜ Untested |
+| SYS-006 (REQ-007, REQ-017, REQ-IF-003, REQ-CN-003) | REQ-007, REQ-017, REQ-IF-003, REQ-CN-003 | ARCH-006 | Workspace Runner | ITP-006-A | Bottom-Up | ITS-006-A2 | ⬜ Untested |
+| SYS-006 (REQ-007, REQ-017, REQ-IF-003, REQ-CN-003) | REQ-007, REQ-017, REQ-IF-003, REQ-CN-003 | ARCH-006 | Workspace Runner | ITP-006-A | Bottom-Up | ITS-006-A3 | ⬜ Untested |
 | SYS-007 (REQ-008) | REQ-008 | ARCH-007 | Scope & Test Compliance Validator | ITP-007-A | Bottom-Up | ITS-007-A1 | ⬜ Untested |
 | SYS-007 (REQ-008) | REQ-008 | ARCH-007 | Scope & Test Compliance Validator | ITP-007-A | Bottom-Up | ITS-007-A2 | ⬜ Untested |
-| SYS-008 (REQ-009) | REQ-009 | ARCH-008 | Security Scan Pipeline | ITP-008-A | Bottom-Up | ITS-008-A1 | ⬜ Untested |
-| SYS-008 (REQ-009) | REQ-009 | ARCH-008 | Security Scan Pipeline | ITP-008-A | Bottom-Up | ITS-008-A2 | ⬜ Untested |
+| SYS-008 (REQ-009, REQ-010) | REQ-009, REQ-010 | ARCH-008 | Security & CI Debug Pipeline | ITP-008-A | Bottom-Up | ITS-008-A1 | ⬜ Untested |
+| SYS-008 (REQ-009, REQ-010) | REQ-009, REQ-010 | ARCH-008 | Security & CI Debug Pipeline | ITP-008-A | Bottom-Up | ITS-008-A2 | ⬜ Untested |
 | SYS-009 (REQ-011, REQ-012, REQ-IF-001) | REQ-011, REQ-012, REQ-IF-001 | ARCH-009 | GitHub API Client | ITP-009-A | Top-Down | ITS-009-A1 | ⬜ Untested |
 | SYS-009 (REQ-011, REQ-012, REQ-IF-001) | REQ-011, REQ-012, REQ-IF-001 | ARCH-009 | GitHub API Client | ITP-009-A | Top-Down | ITS-009-A2 | ⬜ Untested |
 | SYS-010 (REQ-013, REQ-016) | REQ-013, REQ-016 | ARCH-010 | Model Registry | ITP-010-A | Top-Down | ITS-010-A1 | ⬜ Untested |
@@ -312,6 +324,9 @@ None — all integration tests trace to modules.
 | ARCH-003 (SYS-003) | SYS-003 | MOD-004 | Queue Manager | UTP-004-A | Statement + Boundary Coverage | UTS-004-A3 | ⬜ Untested |
 | ARCH-003 (SYS-003) | SYS-003 | MOD-005 | Worker Scheduler | UTP-005-A | Statement Coverage | UTS-005-A1 | ⬜ Untested |
 | ARCH-003 (SYS-003) | SYS-003 | MOD-005 | Worker Scheduler | UTP-005-A | Statement Coverage | UTS-005-A2 | ⬜ Untested |
+| ARCH-003 (SYS-003) | SYS-003 | MOD-009 | CI Gate Monitor | UTP-009-A | Branch Coverage | UTS-009-A1 | ⬜ Untested |
+| ARCH-003 (SYS-003) | SYS-003 | MOD-009 | CI Gate Monitor | UTP-009-A | Branch Coverage | UTS-009-A2 | ⬜ Untested |
+| ARCH-003 (SYS-003) | SYS-003 | MOD-009 | CI Gate Monitor | UTP-009-A | Branch Coverage | UTS-009-A3 | ⬜ Untested |
 | ARCH-004 (SYS-004) | SYS-004 | MOD-006 | Clone Cache Manager | UTP-006-A | Boundary Value Analysis | UTS-006-A1 | ⬜ Untested |
 | ARCH-004 (SYS-004) | SYS-004 | MOD-006 | Clone Cache Manager | UTP-006-A | Boundary Value Analysis | UTS-006-A2 | ⬜ Untested |
 | ARCH-004 (SYS-004) | SYS-004 | MOD-006 | Clone Cache Manager | UTP-006-A | Boundary Value Analysis | UTS-006-A3 | ⬜ Untested |
@@ -319,9 +334,6 @@ None — all integration tests trace to modules.
 | ARCH-005 (SYS-005) | SYS-005 | MOD-007 | Docs Loader | UTP-007-A | Branch Coverage | UTS-007-A2 | ⬜ Untested |
 | ARCH-006 (SYS-006) | SYS-006 | MOD-008 | Workspace Runner | UTP-008-A | Statement Coverage | UTS-008-A1 | ⬜ Untested |
 | ARCH-006 (SYS-006) | SYS-006 | MOD-008 | Workspace Runner | UTP-008-A | Statement Coverage | UTS-008-A2 | ⬜ Untested |
-| ARCH-006 (SYS-006) | SYS-006 | MOD-009 | CI Gate Monitor | UTP-009-A | Branch Coverage | UTS-009-A1 | ⬜ Untested |
-| ARCH-006 (SYS-006) | SYS-006 | MOD-009 | CI Gate Monitor | UTP-009-A | Branch Coverage | UTS-009-A2 | ⬜ Untested |
-| ARCH-006 (SYS-006) | SYS-006 | MOD-009 | CI Gate Monitor | UTP-009-A | Branch Coverage | UTS-009-A3 | ⬜ Untested |
 | ARCH-006 (SYS-006) | SYS-006 | MOD-019 | Skill Set Selector | UTP-019-A | Branch Coverage | UTS-019-A1 | ⬜ Untested |
 | ARCH-006 (SYS-006) | SYS-006 | MOD-019 | Skill Set Selector | UTP-019-A | Branch Coverage | UTS-019-A2 | ⬜ Untested |
 | ARCH-006 (SYS-006) | SYS-006 | MOD-019 | Skill Set Selector | UTP-019-A | Branch Coverage | UTS-019-A3 | ⬜ Untested |
@@ -367,8 +379,68 @@ None — all integration tests trace to modules.
 | **MOD → UTP Coverage** | 19/19 (100%) |
 
 
+## Matrix H — Hazard Traceability
+
+| HAZ ID | Mitigation | Verification | Status |
+|--------|-----------|-------------|--------|
+| HAZ-001 | REQ-001 | ATP-001-A ATP-001-B | ⬜ Pending |
+| | REQ-IF-002 | ATP-IF-002-A | ⬜ Pending |
+| HAZ-002 | REQ-NF-002 | ATP-NF-002-A | ⬜ Pending |
+| HAZ-003 | REQ-002 | ATP-002-A | ⬜ Pending |
+| | REQ-003 | ATP-003-A | ⬜ Pending |
+| HAZ-004 | REQ-002 | ATP-002-A | ⬜ Pending |
+| | REQ-004 | ATP-004-A | ⬜ Pending |
+| HAZ-005 | REQ-004 | ATP-004-A | ⬜ Pending |
+| | REQ-012 | ATP-012-A | ⬜ Pending |
+| HAZ-006 | REQ-NF-005 | ATP-NF-005-A | ⬜ Pending |
+| HAZ-007 | REQ-010 | ATP-010-A | ⬜ Pending |
+| | REQ-014 | ATP-014-A | ⬜ Pending |
+| HAZ-008 | REQ-005 | ATP-005-A | ⬜ Pending |
+| | REQ-014 | ATP-014-A | ⬜ Pending |
+| HAZ-009 | REQ-004 | ATP-004-A | ⬜ Pending |
+| | REQ-005 | ATP-005-A | ⬜ Pending |
+| HAZ-010 | REQ-006 | ATP-006-A | ⬜ Pending |
+| | REQ-015 | ATP-015-A | ⬜ Pending |
+| HAZ-011 | REQ-007 | ATP-007-A | ⬜ Pending |
+| | REQ-014 | ATP-014-A | ⬜ Pending |
+| HAZ-012 | REQ-007 | ATP-007-A | ⬜ Pending |
+| | REQ-CN-004 | ATP-CN-004-A | ⬜ Pending |
+| HAZ-013 | REQ-008 | ATP-008-A | ⬜ Pending |
+| HAZ-014 | REQ-009 | ATP-009-A | ⬜ Pending |
+| | REQ-NF-004 | ATP-NF-004-A | ⬜ Pending |
+| HAZ-015 | REQ-010 | ATP-010-A | ⬜ Pending |
+| | REQ-014 | ATP-014-A | ⬜ Pending |
+| HAZ-016 | REQ-011 | ATP-011-A | ⬜ Pending |
+| | REQ-012 | ATP-012-A | ⬜ Pending |
+| | REQ-NF-005 | ATP-NF-005-A | ⬜ Pending |
+| HAZ-017 | REQ-012 | ATP-012-A | ⬜ Pending |
+| HAZ-018 | REQ-013 | ATP-013-A | ⬜ Pending |
+| | REQ-016 | ATP-016-A | ⬜ Pending |
+| HAZ-019 | REQ-013 | ATP-013-A | ⬜ Pending |
+| HAZ-020 | REQ-013 | ATP-013-A | ⬜ Pending |
+| HAZ-021 | REQ-IF-005 | ATP-IF-005-A | ⬜ Pending |
+| | REQ-NF-005 | ATP-NF-005-A | ⬜ Pending |
+| HAZ-022 | REQ-IF-004 | ATP-IF-004-A | ⬜ Pending |
+| | REQ-016 | ATP-016-A | ⬜ Pending |
+| HAZ-023 | REQ-NF-004 | ATP-NF-004-A | ⬜ Pending |
+| | REQ-CN-002 | ATP-CN-002-A | ⬜ Pending |
+| HAZ-024 | REQ-NF-003 | ATP-NF-003-A | ⬜ Pending |
+| | REQ-014 | ATP-014-A | ⬜ Pending |
+| HAZ-025 | REQ-CN-004 | ATP-CN-004-A | ⬜ Pending |
+| HAZ-026 | REQ-015 | ATP-015-A | ⬜ Pending |
+| | REQ-NF-007 | ATP-NF-007-A | ⬜ Pending |
+| HAZ-027 | REQ-013 | ATP-013-A | ⬜ Pending |
+| | REQ-014 | ATP-014-A | ⬜ Pending |
+
+### Matrix H Coverage
+
+| Metric | Value |
+|--------|-------|
+| **Total Hazards (HAZ)** | 27 |
+| **HAZ with Verification** | 27/27 (100%) |
+
 ## Audit Notes
 
 - **Matrix generated by**: `build-matrix.ps1` (deterministic regex parser)
-- **Source documents**: `requirements.md`, `acceptance-plan.md`, `system-design.md`, `system-test.md`, `architecture-design.md`, `integration-test.md`, `module-design.md`, `unit-test.md`
-- **Last validated**: 2026-07-31
+- **Source documents**: `requirements.md`, `acceptance-plan.md`, `system-design.md`, `system-test.md`, `architecture-design.md`, `integration-test.md`, `module-design.md`, `unit-test.md`, `hazard-analysis.md`
+- **Last validated**: 2026-08-01
