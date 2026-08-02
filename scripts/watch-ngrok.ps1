@@ -107,9 +107,10 @@ function Update-SlackEventUrl {
     if ($botToken) {
         $channelId = [System.Environment]::GetEnvironmentVariable("SLACK_CHANNEL_ID")
         if (-not $channelId) { $channelId = "C0BM96HJ3KM" }
+        $msgText = ":warning: *ngrok URL changed!* Update Slack Event Subscriptions Request URL to: " + $eventsUrl
         $msgBody = @{
             channel = $channelId
-            text    = (":warning: *ngrok URL changed!* Update Slack Event Subscriptions Request URL to: `" + $eventsUrl + "`")
+            text    = $msgText
         } | ConvertTo-Json
         try {
             Invoke-RestMethod `
