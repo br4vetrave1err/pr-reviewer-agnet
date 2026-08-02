@@ -49,6 +49,7 @@ class ReviewPipeline:
         self._skills = skills_selector
         self._config = config
         self._slack = slack_notifier
+        self._staged_reviews: dict[str, tuple[str, list[Finding]]] = {}
 
     async def execute(self, job: ReviewJob, token: str) -> PipelineResult:
         if not job.head and job.pr:
@@ -94,6 +95,7 @@ class ReviewPipeline:
 
         # REQ-019, REQ-020: Send Slack preview notification and hold in pending_approval
         if self._slack:
+            self._staged_reviews[job.run_id] = (result.summary, findings)
             await self._slack.notify_staged_review(
                 run_id=job.run_id,
                 owner=job.owner,
@@ -103,8 +105,10 @@ class ReviewPipeline:
                 summary=result.summary,
                 findings_count=len(findings),
             )
+            log.info("staged_review_pending_approval", extra={"event": "staged_review_pending_approval", "run_id": job.run_id})
+            return PipelineResult(status="pending_approval")
 
-        # Staged approval gate (REQ-020)
+        # Fallback: if no Slack notifier configured, publish directly
         await self._publish(job, result.summary, findings)
         return PipelineResult(status="posted")
 
@@ -125,10 +129,16 @@ class ReviewPipeline:
 
         return findings[: 100]
 
-    async def publish_approved_review(self, job: ReviewJob, summary: str, findings: list[Finding], is_draft: bool = False, auto_merge: bool = True) -> None:
+    async def publish_approved_review(self, job: ReviewJob, summary: str = "", findings: list[Finding] | None = None, is_draft: bool = True, auto_merge: bool = True) -> None:
         """REQ-021, REQ-022: Publish approved review, promote Draft PRs, and auto-merge PR on GitHub."""
+        if job.run_id in self._staged_reviews:
+            summary, findings = self._staged_reviews.pop(job.run_id)
+        elif not summary and (findings is None):
+            summary = "Approved via Slack"
+            findings = []
+
         event = "APPROVE" if is_draft else "COMMENT"
-        await self._publish(job, summary, findings, event=event)
+        await self._publish(job, summary, findings or [], event=event)
         if is_draft:
             await self._github.mark_pr_ready_for_review(job.owner, job.repo, job.pr)  # REQ-022
         merged = False

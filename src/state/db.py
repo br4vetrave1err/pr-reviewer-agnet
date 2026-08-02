@@ -21,7 +21,7 @@ from queue.manager import ReviewJob
 log = logging.getLogger("pr_reviewer.state.db")
 
 _LEASE_TTL = 3600
-_RUN_STATES = ("pending_ci", "queued", "running", "posted", "failed", "partial", "skipped", "ci-failed")
+_RUN_STATES = ("pending_ci", "queued", "running", "pending_approval", "posted", "failed", "partial", "skipped", "ci-failed")
 
 
 class StateRepository:
