@@ -1,4 +1,4 @@
-﻿# Implements: MOD-009, ARCH-003, SYS-008, REQ-010
+# Implements: MOD-009, ARCH-003, SYS-008, REQ-010
 """CI Gate Monitor (MOD-009).
 
 Runs while a job is ``pending_ci``. No CI for the head after the settle
@@ -68,21 +68,79 @@ class CiGateMonitor:
     async def _watch(self, job: ReviewJob) -> None:
         elapsed = 0.0
         while self._state.get_run(job.run_id).status == PENDING_CI:
-            await asyncio.sleep(self._poll)
-            elapsed += self._poll
-
             try:
-                runs = await self._github.poll_check_runs(job.owner, job.repo, job.head)
+                if not job.head:
+                    runs = []
+                else:
+                    runs = await self._github.poll_check_runs(job.owner, job.repo, job.head)
             except Exception:  # poll API 403/429 -> backoff, stay pending (ARCH-009)
                 log.warning("CI poll failed for %s; staying pending_ci", job.run_id)
+                await asyncio.sleep(self._poll)
+                elapsed += self._poll
                 continue
 
             if not runs:
-                if elapsed >= self._settle:
-                    self._state.set_status(job.run_id, QUEUED)  # no-CI bypass
+                self._state.set_status(job.run_id, QUEUED)  # no-CI bypass
+                self._pass(job)
+                log.info(
+                    "ci_gate_resolved",
+                    extra={
+                        "event": "ci_gate_resolved",
+                        "run_id": job.run_id,
+                        "outcome": "no_ci_bypass",
+                        "duration_ms": int(elapsed * 1000),
+                    },
+                )
+                return
+
+            log.info(
+                "ci_gate_waiting",
+                extra={
+                    "event": "ci_gate_waiting",
+                    "run_id": job.run_id,
+                    "owner": job.owner,
+                    "repo": job.repo,
+                    "pr": job.pr,
+                    "head": job.head,
+                    "pending_checks": len([r for r in runs if not r.completed]),
+                },
+            )
+
+            if all(r.completed for r in runs):
+                if any(r.failed for r in runs):
+                    await self._fail(job, elapsed)
+                else:
+                    self._state.set_status(job.run_id, QUEUED)  # green -> review proceeds
                     self._pass(job)
-                    log.info("no CI for %s; bypass to queued", job.run_id)
-                continue
+                    log.info(
+                        "ci_gate_resolved",
+                        extra={
+                            "event": "ci_gate_resolved",
+                            "run_id": job.run_id,
+                            "outcome": "green",
+                            "duration_ms": int(elapsed * 1000),
+                        },
+                    )
+                return
+
+            if elapsed >= self._cap:
+                self._state.set_status(job.run_id, SKIPPED)
+                await self._github.post_comment(
+                    job.owner, job.repo, job.pr, "CI hasn't completed; no review run"
+                )
+                log.info(
+                    "ci_gate_resolved",
+                    extra={
+                        "event": "ci_gate_resolved",
+                        "run_id": job.run_id,
+                        "outcome": "timeout_skipped",
+                        "duration_ms": int(elapsed * 1000),
+                    },
+                )
+                return
+
+            await asyncio.sleep(self._poll)
+            elapsed += self._poll
 
             if all(r.completed for r in runs):
                 if any(r.failed for r in runs):
@@ -105,7 +163,7 @@ class CiGateMonitor:
         if self._requeue is not None:
             self._requeue(job)
 
-    async def _fail(self, job: ReviewJob) -> None:
+    async def _fail(self, job: ReviewJob, elapsed: float = 0.0) -> None:
         self._state.set_status(job.run_id, CI_FAILED)
         try:
             logs = await self._github.fetch_failure_logs(job.owner, job.repo, job.pr, job.head)
@@ -116,7 +174,15 @@ class CiGateMonitor:
                 job.owner, job.repo, job.pr,
                 "CI failed for this head; logs were unavailable during diagnosis.",
             )
-        log.info("ci-failed diagnosis posted for %s", job.run_id)
+        log.info(
+            "ci_gate_resolved",
+            extra={
+                "event": "ci_gate_resolved",
+                "run_id": job.run_id,
+                "outcome": "ci_failed",
+                "duration_ms": int(elapsed * 1000),
+            },
+        )
 
     def _diagnose(self, logs: str) -> str:
         """Root-cause pass on CI logs (/diagnosing-bugs context)."""

@@ -1,4 +1,4 @@
-﻿# Implements: MOD-012, ARCH-008, SYS-008, REQ-009, ARCH-006
+# Implements: MOD-012, ARCH-008, SYS-008, REQ-009, ARCH-006
 """LLM Security Reviewer (MOD-012 / ARCH-008).
 
 Runs INSIDE the single ``opencode run`` session (MOD-008) â€” the /code-review
@@ -44,7 +44,19 @@ class LlmSecurityReviewer:
         )
 
     async def review(self, context: SecurityContext) -> ReviewResult:
+        import time
+        t0 = time.monotonic()
         result = await self._runner.security_step(self.build_prompt(context))
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        log.info(
+            "llm_security_review",
+            extra={
+                "event": "llm_security_review",
+                "findings": len(result.findings),
+                "duration_ms": duration_ms,
+                "retryable": result.retryable,
+            },
+        )
         if result.retryable:
             log.warning("LLM security step failed; retryable")
             return result

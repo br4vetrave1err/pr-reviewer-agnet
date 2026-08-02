@@ -1,4 +1,4 @@
-﻿# Implements: MOD-001, ARCH-001, SYS-001, REQ-001, REQ-NF-002, SYS-002
+# Implements: MOD-001, ARCH-001, SYS-001, REQ-001, REQ-NF-002, SYS-002
 """Webhook Handler (MOD-001 / SYS-001).
 
 HTTPS endpoint ``POST /api/webhook``. Verifies the ``X-Hub-Signature-256``
@@ -95,12 +95,13 @@ def normalize_event(event: str, action: str, payload: dict) -> NormalizedEvent:
         )
     if event == "issue_comment":
         comment = payload.get("comment") or {}
+        issue = payload.get("issue") or {}
         return NormalizedEvent(
             event=event,
             action=action,
             owner=(repo.get("owner") or {}).get("login") or "",
             repo=repo.get("name") or "",
-            pr_number=pr.get("number"),
+            pr_number=issue.get("number") or pr.get("number"),
             head_sha=(pr.get("head") or {}).get("sha"),
             comment_body=comment.get("body"),
             author=(comment.get("user") or {}).get("login"),
@@ -163,9 +164,28 @@ class WebhookHandler:
             return Response(status_code=401)  # ARCH-001 bad-signature
 
         if event not in SUPPORTED_EVENTS or (body.get("action") or "") not in SUPPORTED_ACTIONS.get(event, frozenset()):
-            log.info("ignored webhook: unsupported event/action %s/%s", event, body.get("action"))
+            log.info(
+                "webhook_ignored",
+                extra={
+                    "event": "webhook_ignored",
+                    "event_type": event,
+                    "action": body.get("action"),
+                    "reason": "unsupported_event_or_action",
+                },
+            )
             return Response(status_code=204)  # ignore silently
 
         asyncio.create_task(self._dispatcher.dispatch(normalized))
-        log.info("acked webhook %s/%s for %s", normalized.event, normalized.action, normalized.repo)
+        log.info(
+            "webhook_received",
+            extra={
+                "event": "webhook_received",
+                "event_type": normalized.event,
+                "action": normalized.action,
+                "owner": normalized.owner,
+                "repo": normalized.repo,
+                "pr": normalized.pr_number,
+                "sig_valid": True,
+            },
+        )
         return Response(status_code=200)

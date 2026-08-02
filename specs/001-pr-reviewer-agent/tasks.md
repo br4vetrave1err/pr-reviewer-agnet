@@ -239,6 +239,23 @@ description: "Task list template for feature implementation"
 - [ ] T095 [US6] Acceptance test: COMMENT-only advisory + retry then partial report (ATP-012-A, ATP-014-A) <!-- traces-to: MOD-013 → ARCH-009 → SYS-009 → REQ-012 -->
 - [ ] T096 [US6] Run acceptance tests (ATP-012-A, ATP-014-A) <!-- traces-to: MOD-013 → ARCH-009 → SYS-009 → REQ-012 -->
 
+### Phase N: Observability Enhancement (P1)
+
+**Goal**: High operational visibility — `LoggingConfigurator` (JSON log formatting + `HealthzFilter` 15-min throttle), 20 structured service event types, subprocess log streaming, and compose ngrok logging.
+
+- [ ] T122 [P] [US7] Unit tests for `JsonFormatter` & `HealthzFilter`: `tests/unit/test_json_formatter.py`, `tests/unit/test_healthz_filter.py` <!-- traces-to: MOD-017 → ARCH-013 → SYS-014 → REQ-015, REQ-NF-007 -->
+- [ ] T123 [P] [US7] Unit tests for per-service structured event schemas: `tests/unit/test_service_log_events.py` <!-- traces-to: MOD-017 → ARCH-013 → SYS-014 → REQ-015, REQ-NF-007 -->
+- [ ] T124 [P] [US7] Implement `LoggingConfigurator`, `JsonFormatter`, and `HealthzFilter` in `src/observability/configurator.py` <!-- traces-to: MOD-017 → ARCH-013 → SYS-014 → REQ-015, REQ-NF-007 -->
+- [ ] T125 [US7] Wire `LoggingConfigurator` into `create_app()` in `src/webhook/app.py` <!-- traces-to: MOD-017 → ARCH-013 → SYS-014 → REQ-015, REQ-NF-007 -->
+- [ ] T126 [US7] Add structured log calls (`webhook_received`, `webhook_ignored`, `ngrok_url_acquired`, `ngrok_reconcile`, `ngrok_error`) in `src/webhook/handler.py` and `src/webhook/registrar.py` <!-- traces-to: MOD-001, MOD-017 → ARCH-001, ARCH-013 → SYS-001, SYS-014 → REQ-001, REQ-015 -->
+- [ ] T127 [US7] Add structured log calls (`github_request`, `github_rate_limited`) in `src/github/client.py` <!-- traces-to: MOD-013, MOD-017 → ARCH-009, ARCH-013 → SYS-009, SYS-014 → REQ-IF-001, REQ-015 -->
+- [ ] T128 [US7] Add structured log calls (`opencode_spawn`, `opencode_exit`, `opencode_parse_fallback`, `opencode_parse_ok`) in `src/runner/workspace.py` <!-- traces-to: MOD-008, MOD-017 → ARCH-006, ARCH-013 → SYS-006, SYS-014 → REQ-IF-003, REQ-015 -->
+- [ ] T129 [US7] Add structured log calls (`ci_gate_waiting`, `ci_gate_resolved`) in `src/ci/gate.py` <!-- traces-to: MOD-009, MOD-017 → ARCH-008, ARCH-013 → SYS-008, SYS-014 → REQ-010, REQ-015 -->
+- [ ] T130 [US7] Add structured log calls (`job_enqueued`, `job_dedup_hit`, `job_state_transition`, `worker_tick`, `job_started`, `job_completed`) in `src/queue/manager.py` and `src/queue/worker.py` <!-- traces-to: MOD-004, MOD-005, MOD-017 → ARCH-003, ARCH-013 → SYS-003, SYS-014 → REQ-004, REQ-015 -->
+- [ ] T131 [US7] Add structured log calls (`gitleaks_run`, `llm_security_review`) in `src/security/scanner.py` and `src/security/llm.py` <!-- traces-to: MOD-011, MOD-012, MOD-017 → ARCH-008, ARCH-013 → SYS-008, SYS-014 → REQ-009, REQ-015 -->
+- [ ] T132 [US7] Run unit tests for observability (`test_json_formatter.py`, `test_healthz_filter.py`, `test_service_log_events.py`) <!-- traces-to: MOD-017 → ARCH-013 → SYS-014 → REQ-015, REQ-NF-007 -->
+- [ ] T133 [US7] Integration test: `/healthz` probe log suppression (15-min window) in `tests/integration/test_healthz_throttle.py` <!-- traces-to: MOD-017 → ARCH-013 → SYS-014 → REQ-015, REQ-NF-007 -->
+
 ### Polish & Cross-Cutting
 
 - [ ] T097 [P] Documentation updates in `README.md` (docker compose quick start) <!-- traces-to: MOD-016 → ARCH-012 → SYS-013 → REQ-CN-001 -->
@@ -359,5 +376,6 @@ With multiple developers:
 | US4 — Repo-scoped and vendored skills | MOD-008, 009 | UTP-007/008/009, ITP-006, STP-005/006, ATP-006/007/010 | TDD-ordered, P2 |
 | US5 — Re-review on new commits | MOD-004, 005 | UTP-004/005, ITP-003-B, STP-003, ATP-004 | TDD-ordered, P2 |
 | US6 — Always-COMMENT advisory reviews and failure reporting | MOD-004, 013 | UTP-013/018, ITP-012/013, STP-003-B/014, ATP-012/014 | TDD-ordered, P3 |
+| US7 — Observability Enhancement | MOD-001, 004, 005, 006, 008, 009, 011, 012, 013, 017 | test_json_formatter, test_healthz_filter, test_service_log_events, test_healthz_throttle | TDD-ordered, P1 |
 
 Hazard-driven elevation skipped — `hazard-analysis.md` absent. Full traceability via `v-model/traceability-matrix.md` (all four matrices 100%, no gaps).

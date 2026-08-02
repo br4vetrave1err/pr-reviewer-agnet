@@ -1,4 +1,4 @@
-﻿# Implements: MOD-005, ARCH-003, SYS-003, REQ-004, REQ-010, REQ-014, REQ-NF-005, REQ-NF-006
+# Implements: MOD-005, ARCH-003, SYS-003, REQ-004, REQ-010, REQ-014, REQ-NF-005, REQ-NF-006
 """Worker Scheduler (MOD-005 / ARCH-003).
 
 Claims queued jobs (status -> running, transactionally), runs the pipeline
@@ -56,6 +56,16 @@ class WorkerScheduler:
                 continue
 
             self._active += 1
+            import time
+            t0 = time.monotonic()
+            log.info(
+                "job_started",
+                extra={
+                    "event": "job_started",
+                    "run_id": job.run_id,
+                    "attempt": job.attempts + 1,
+                },
+            )
             try:
                 result = await self._pipeline(job)
                 if result is None:
@@ -73,3 +83,12 @@ class WorkerScheduler:
                     self._manager._state.set_status(job.run_id, result.status or "posted")
             finally:
                 self._active -= 1
+                duration_ms = int((time.monotonic() - t0) * 1000)
+                log.info(
+                    "job_completed",
+                    extra={
+                        "event": "job_completed",
+                        "run_id": job.run_id,
+                        "duration_ms": duration_ms,
+                    },
+                )

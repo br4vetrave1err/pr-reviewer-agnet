@@ -1,4 +1,4 @@
-﻿# Implements: MOD-011, ARCH-008, SYS-008, REQ-009
+# Implements: MOD-011, ARCH-008, SYS-008, REQ-009
 """Security Scan Runner (MOD-011 / SYS-008).
 
 Runs gitleaks against the full checkout (REQ-009) and normalizes findings.
@@ -37,6 +37,8 @@ class SecurityScanRunner:
         return ci_status in (None, "success", "green")
 
     def scan(self, checkout: str) -> SecReport:
+        import time
+        t0 = time.monotonic()
         try:
             proc = subprocess.run(
                 [self._bin, "detect", "--source", checkout, "--report-format", "json", "--no-banner"],
@@ -72,4 +74,13 @@ class SecurityScanRunner:
                         type="secrets",
                     )
                 )
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        log.info(
+            "gitleaks_run",
+            extra={
+                "event": "gitleaks_run",
+                "findings": len(findings),
+                "duration_ms": duration_ms,
+            },
+        )
         return SecReport(secrets=findings)

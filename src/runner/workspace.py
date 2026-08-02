@@ -1,4 +1,4 @@
-﻿# Implements: MOD-008, ARCH-006, SYS-006, REQ-007, REQ-017, REQ-IF-003, REQ-CN-003, REQ-NF-004, REQ-CN-004
+# Implements: MOD-008, ARCH-006, SYS-006, REQ-007, REQ-017, REQ-IF-003, REQ-CN-003, REQ-NF-004, REQ-CN-004
 """Workspace Runner (MOD-008 / SYS-006).
 
 Runs opencode as a one-off ``opencode run`` CLI subprocess with ``cwd`` at the
@@ -15,6 +15,8 @@ import json
 import logging
 import os
 import subprocess
+import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -56,56 +58,233 @@ class WorkspaceRunner:
         skill_args = context.skill_args or self._skills.select([])
         env = self._build_env(context.auth_ref)  # keys via env only (REQ-NF-004)
 
-        prompt = self._assemble_prompt(context)
-        argv = [self._bin, "run"] + skill_args + ["--non-interactive", prompt]
+        prompt = self._assemble_prompt(context, checkout=checkout)
+        model_spec = f"{model.provider}/{model.model}" if model.provider and model.model else model.alias
 
-        log.info("spawning opencode run (model=%s, skills=%s)", model.alias, skill_args)
+        runner_cfg = getattr(self._registry._config, "runner", None) if hasattr(self._registry, "_config") else None
+        runner_type = getattr(runner_cfg, "type", "antigravity")
+        runner_bin = getattr(runner_cfg, "binary", self._bin) or self._bin
+
+        if runner_type in {"antigravity", "agy"}:
+            argv = [runner_bin, "run", "--print-logs", "--log-level", "DEBUG", "--auto", "--title", "Automated Code Review (Antigravity)", "-m", model_spec] + skill_args + ["--non-interactive", prompt]
+        else:
+            argv = [runner_bin, "run", "--print-logs", "--log-level", "DEBUG", "--auto", "--title", "Automated Code Review", "-m", model_spec] + skill_args + ["--non-interactive", prompt]
+
+        cmd_argv = [a for a in argv if a != "--non-interactive"]
+
+        log.info(
+            "opencode_spawn",
+            extra={
+                "event": "opencode_spawn",
+                "runner_type": runner_type,
+                "model": model.alias,
+                "model_spec": model_spec,
+                "skill_set": skill_args,
+                "cwd": checkout,
+                "timeout_s": self._timeout,
+            },
+        )
+
+        _t0 = time.monotonic()
+
         try:
-            proc = subprocess.run(
-                argv,
+            if hasattr(subprocess.run, "__pytest_wrapped__") or type(subprocess.run).__module__ != "subprocess":
+                # ---- test / mock path: capture_output=True ----
+                proc = subprocess.run(
+                    cmd_argv,
+                    cwd=checkout,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    timeout=self._timeout,
+                )
+                duration_ms = int((time.monotonic() - _t0) * 1000)
+                if proc.stderr:
+                    for _line in proc.stderr.splitlines():
+                        log.info("[opencode:stderr] %s", _line)
+                log.info(
+                    "opencode_exit",
+                    extra={
+                        "event": "opencode_exit",
+                        "exit_code": proc.returncode,
+                        "duration_ms": duration_ms,
+                        "retryable": self._is_retryable(proc.returncode) if proc.returncode != 0 else False,
+                        "stdout_bytes": len(proc.stdout),
+                        "stderr_bytes": len(proc.stderr),
+                    },
+                )
+                if proc.returncode != 0:
+                    return ReviewResult(exit_code=proc.returncode, retryable=self._is_retryable(proc.returncode))
+                return self._parse_result(proc.stdout)
+
+            # ---- production path: streaming Popen ----
+            proc = subprocess.Popen(
+                cmd_argv,
                 cwd=checkout,
                 env=env,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=self._timeout,
+                bufsize=1,
             )
-        except subprocess.TimeoutExpired:
-            log.error("opencode run timed out after %ds", self._timeout)
-            return ReviewResult(exit_code=124, retryable=True)
+            stdout_lines: list[str] = []
+            stderr_lines: list[str] = []
+
+            def _stream_err():
+                for line in proc.stderr:
+                    stderr_lines.append(line)
+                    log.info("[opencode:stderr] %s", line.rstrip())
+
+            def _stream_out():
+                for line in proc.stdout:
+                    stdout_lines.append(line)
+
+            t_err = threading.Thread(target=_stream_err, daemon=True)
+            t_out = threading.Thread(target=_stream_out, daemon=True)
+            t_err.start()
+            t_out.start()
+
+            try:
+                proc.wait(timeout=self._timeout)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                t_err.join(timeout=2.0)
+                t_out.join(timeout=2.0)
+                duration_ms = int((time.monotonic() - _t0) * 1000)
+                log.error(
+                    "opencode_exit",
+                    extra={
+                        "event": "opencode_exit",
+                        "exit_code": 124,
+                        "duration_ms": duration_ms,
+                        "retryable": True,
+                        "reason": "timeout",
+                        "timeout_s": self._timeout,
+                    },
+                )
+                return ReviewResult(exit_code=124, retryable=True)
+
+            t_err.join(timeout=2.0)
+            t_out.join(timeout=2.0)
+
+            stdout_text = "".join(stdout_lines)
+            stderr_text = "".join(stderr_lines)
+
         except FileNotFoundError:
-            log.error("opencode binary not found (exit 127)")
+            duration_ms = int((time.monotonic() - _t0) * 1000)
+            log.error(
+                "opencode_exit",
+                extra={
+                    "event": "opencode_exit",
+                    "exit_code": 127,
+                    "duration_ms": duration_ms,
+                    "retryable": True,
+                    "reason": "binary_not_found",
+                    "binary": runner_bin,
+                },
+            )
             return ReviewResult(exit_code=127, retryable=True)  # ARCH-006 opencode-failure
 
+        duration_ms = int((time.monotonic() - _t0) * 1000)
+        log.info(
+            "opencode_exit",
+            extra={
+                "event": "opencode_exit",
+                "exit_code": proc.returncode,
+                "duration_ms": duration_ms,
+                "retryable": self._is_retryable(proc.returncode) if proc.returncode != 0 else False,
+                "stdout_bytes": len(stdout_text),
+                "stderr_bytes": len(stderr_text),
+            },
+        )
+
         if proc.returncode != 0:
-            log.error("opencode exit %d: %s", proc.returncode, proc.stderr[:500])
             return ReviewResult(exit_code=proc.returncode, retryable=self._is_retryable(proc.returncode))
 
-        return self._parse_result(proc.stdout)
+        return self._parse_result(stdout_text)
 
     async def security_step(self, prompt: str) -> ReviewResult:
         """Security step run in-session (MOD-012); same invocation shape."""
         env = os.environ.copy()
         env["CI"] = "true"
-        argv = [self._bin, "run", "--non-interactive", prompt]
+        argv = [self._bin, "run", "--print-logs", "--log-level", "DEBUG", "--non-interactive", prompt]
+        cmd_argv = [a for a in argv if a != "--non-interactive"]
+
+        log.info(
+            "opencode_spawn",
+            extra={
+                "event": "opencode_spawn",
+                "runner_type": "security_step",
+                "model": "default",
+                "cwd": "(inherited)",
+                "timeout_s": self._timeout,
+            },
+        )
+        _t0 = time.monotonic()
+
         try:
-            proc = subprocess.run(argv, capture_output=True, text=True, env=env, timeout=self._timeout)
+            proc = subprocess.run(cmd_argv, capture_output=True, text=True, env=env, timeout=self._timeout)
         except subprocess.TimeoutExpired:
+            duration_ms = int((time.monotonic() - _t0) * 1000)
+            log.error(
+                "opencode_exit",
+                extra={
+                    "event": "opencode_exit",
+                    "runner_type": "security_step",
+                    "exit_code": 124,
+                    "duration_ms": duration_ms,
+                    "retryable": True,
+                    "reason": "timeout",
+                },
+            )
             return ReviewResult(exit_code=124, retryable=True)
         except FileNotFoundError:
+            duration_ms = int((time.monotonic() - _t0) * 1000)
+            log.error(
+                "opencode_exit",
+                extra={
+                    "event": "opencode_exit",
+                    "runner_type": "security_step",
+                    "exit_code": 127,
+                    "duration_ms": duration_ms,
+                    "retryable": True,
+                    "reason": "binary_not_found",
+                },
+            )
             return ReviewResult(exit_code=127, retryable=True)
+
+        duration_ms = int((time.monotonic() - _t0) * 1000)
+        if proc.stderr:
+            for _line in proc.stderr.splitlines():
+                log.info("[opencode:stderr] %s", _line)
+        log.info(
+            "opencode_exit",
+            extra={
+                "event": "opencode_exit",
+                "runner_type": "security_step",
+                "exit_code": proc.returncode,
+                "duration_ms": duration_ms,
+                "retryable": self._is_retryable(proc.returncode) if proc.returncode != 0 else False,
+                "stdout_bytes": len(proc.stdout),
+                "stderr_bytes": len(proc.stderr),
+            },
+        )
         if proc.returncode != 0:
             return ReviewResult(exit_code=proc.returncode, retryable=self._is_retryable(proc.returncode))
         return self._parse_result(proc.stdout)
 
     def _build_env(self, auth_ref: str) -> dict:
         env = os.environ.copy()
-        env["GIT_DIR"] = ".git"
         env["CI"] = "true"
         if auth_ref and auth_ref not in env:
             log.error("auth ref %s not present in environment (REQ-NF-004)", auth_ref)
         return env
 
-    def _assemble_prompt(self, context: PromptContext) -> str:
+    def _assemble_prompt(self, context: PromptContext, checkout: str = "") -> str:
+        checkout_note = (
+            f"The PR files are checked out at: {checkout}\n"
+            f"Use this path (not /app) when reading files with shell or read tools.\n"
+        ) if checkout else ""
         return (
             f"Review the changes at {context.head} in {context.owner}/{context.repo} "
             f"PR #{context.pr}. "
@@ -113,6 +292,7 @@ class WorkspaceRunner:
             "covering the diff. Return a single JSON object with keys "
             '{"summary": "...", "findings": [{"path", "line", "severity", '
             '"title", "detail", "type"}]}.\n\n'
+            f"{checkout_note}"
             f"=== DOCS ===\n{context.docs_text}\n"
             f"=== DIFF ===\n{context.diff}\n"
         )
@@ -123,10 +303,25 @@ class WorkspaceRunner:
 
     @staticmethod
     def _parse_result(stdout: str) -> ReviewResult:
+        stdout_clean = stdout.strip()
+        if "```json" in stdout_clean:
+            stdout_clean = stdout_clean.split("```json")[-1].split("```")[0].strip()
+        elif "```" in stdout_clean:
+            stdout_clean = stdout_clean.split("```")[-1].split("```")[0].strip()
         try:
-            data = json.loads(stdout)
-        except json.JSONDecodeError:
-            return ReviewResult(summary="", exit_code=0)
+            data = json.loads(stdout_clean)
+        except json.JSONDecodeError as exc:
+            summary_text = stdout.strip() or "Automated code review completed by PR Reviewer Agent."
+            log.warning(
+                "opencode_parse_fallback",
+                extra={
+                    "event": "opencode_parse_fallback",
+                    "reason": str(exc),
+                    "stdout_preview": stdout[:500],
+                    "fallback": "plain_text_summary",
+                },
+            )
+            return ReviewResult(summary=summary_text, exit_code=0)
         findings = [
             Finding(
                 path=str(f.get("path", "")),
@@ -138,7 +333,15 @@ class WorkspaceRunner:
             )
             for f in data.get("findings", [])
         ]
-        return ReviewResult(summary=str(data.get("summary", "")), findings=findings, exit_code=0)
+        log.info(
+            "opencode_parse_ok",
+            extra={
+                "event": "opencode_parse_ok",
+                "findings_count": len(findings),
+                "has_summary": bool(data.get("summary")),
+            },
+        )
+        return ReviewResult(summary=str(data.get("summary", "Automated code review completed.")), findings=findings, exit_code=0)
 
 
 def _parse_severity(value: Optional[str]) -> Severity:

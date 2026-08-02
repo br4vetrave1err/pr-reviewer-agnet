@@ -1,4 +1,4 @@
-﻿# Implements: MOD-013, ARCH-009, SYS-009, REQ-011, REQ-012, REQ-NF-003, REQ-NF-001, REQ-IF-001
+# Implements: MOD-013, ARCH-009, SYS-009, REQ-011, REQ-012, REQ-NF-003, REQ-NF-001, REQ-IF-001
 """GitHub Client (MOD-013 / SYS-009).
 
 Submits formal reviews (event ``COMMENT`` always, REQ-012) with the
@@ -81,10 +81,34 @@ class GitHubClient:
             "comments": inline_comments,
         }
         url = f"{self._base}/repos/{owner}/{repo}/pulls/{pr}/reviews"
-        data = await self._retryable(lambda: self._client.post(url, json=payload, headers=self._headers()))
-        if not isinstance(data, dict) or "id" not in data:
-            raise MalformedDataError(f"review submit returned malformed payload for {owner}/{repo}#{pr}")
-        return int(data["id"])
+        try:
+            data = await self._retryable(lambda: self._client.post(url, json=payload, headers=self._headers()))
+            if isinstance(data, dict) and "id" in data:
+                return int(data["id"])
+        except Exception as exc:
+            log.warning("submit_review with inline comments failed for %s/%s#%s: %s; trying summary only", owner, repo, pr, exc)
+            if inline_comments:
+                payload_no_inline = {
+                    "commit_id": head,
+                    "event": "COMMENT",
+                    "body": summary + marker,
+                }
+                try:
+                    data = await self._retryable(lambda: self._client.post(url, json=payload_no_inline, headers=self._headers()))
+                    if isinstance(data, dict) and "id" in data:
+                        return int(data["id"])
+                except Exception:
+                    pass
+            await self.post_comment(owner, repo, pr, summary + marker)
+            return 0
+        return 0
+
+    async def fetch_pr_head(self, owner: str, repo: str, pr: int) -> str:
+        url = f"{self._base}/repos/{owner}/{repo}/pulls/{pr}"
+        data = await self._retryable(lambda: self._client.get(url, headers=self._headers()))
+        if isinstance(data, dict):
+            return (data.get("head") or {}).get("sha") or ""
+        return ""
 
     async def fetch_pr_diff(self, owner: str, repo: str, pr: int) -> str:
         url = f"{self._base}/repos/{owner}/{repo}/pulls/{pr}"
@@ -143,10 +167,71 @@ class GitHubClient:
             raise MalformedDataError(f"malformed PR payload for {owner}/{repo}#{pr}")
         return data
 
+    async def list_webhooks(self, owner: str, repo: str) -> list[dict]:
+        """REQ-CN-001: list the repo's registered webhooks."""
+        url = f"{self._base}/repos/{owner}/{repo}/hooks"
+        data = await self._retryable(lambda: self._client.get(url, headers=self._headers()))
+        if not isinstance(data, list):
+            raise MalformedDataError(f"webhook list returned malformed payload for {owner}/{repo}")
+        return data
+
+    async def create_webhook(self, owner: str, repo: str, url: str, secret: str, events: set[str]) -> dict:
+        """REQ-CN-001: register a webhook pointing at *url* for the managed repo."""
+        endpoint = f"{self._base}/repos/{owner}/{repo}/hooks"
+        payload = {
+            "name": "web",
+            "active": True,
+            "events": list(events),
+            "config": {
+                "url": url,
+                "content_type": "json",
+                "insecure_ssl": "0",
+                "secret": secret,
+            },
+        }
+        data = await self._retryable(lambda: self._client.post(endpoint, json=payload, headers=self._headers()))
+        if not isinstance(data, dict) or "id" not in data:
+            raise MalformedDataError(f"webhook create returned malformed payload for {owner}/{repo}")
+        return data
+
+    async def update_webhook(self, owner: str, repo: str, hook_id: int, url: str, secret: str) -> dict:
+        """REQ-CN-001: re-point an existing webhook at a new URL.
+
+        GitHub replaces unspecified config fields on PATCH, so the secret must
+        be re-sent or the HMAC is silently dropped (deliveries -> 401).
+        """
+        endpoint = f"{self._base}/repos/{owner}/{repo}/hooks/{hook_id}"
+        payload = {
+            "config": {
+                "url": url,
+                "content_type": "json",
+                "insecure_ssl": "0",
+                "secret": secret,
+            }
+        }
+        data = await self._retryable(lambda: self._client.patch(endpoint, json=payload, headers=self._headers()))
+        if not isinstance(data, dict) or "id" not in data:
+            raise MalformedDataError(f"webhook update returned malformed payload for {owner}/{repo}")
+        return data
+
     async def _retryable(self, call) -> Any:
+        import time
         attempt = 1
         while True:
+            t0 = time.monotonic()
             resp = await call()
+            latency_ms = int((time.monotonic() - t0) * 1000)
+            log.info(
+                "github_request",
+                extra={
+                    "event": "github_request",
+                    "method": str(resp.request.method if hasattr(resp, "request") and resp.request else "HTTP"),
+                    "url_path": str(resp.url.path if hasattr(resp, "url") and resp.url else ""),
+                    "status": resp.status_code,
+                    "latency_ms": latency_ms,
+                    "attempt": attempt,
+                },
+            )
             if resp.status_code in (200, 201):
                 return resp.json() if resp.content else {}
             if resp.status_code == 404:
@@ -154,7 +239,15 @@ class GitHubClient:
             if resp.status_code in (403, 429) and attempt < 5:
                 retry_after = _parse_retry_after(resp.headers.get("Retry-After"))
                 delay = retry_after or schedule_retry(attempt, "github")
-                log.warning("rate limited (%d); backing off %.1fs", resp.status_code, delay)
+                log.warning(
+                    "github_rate_limited",
+                    extra={
+                        "event": "github_rate_limited",
+                        "status": resp.status_code,
+                        "retry_after_s": delay,
+                        "attempt": attempt,
+                    },
+                )
                 await asyncio.sleep(delay)
                 attempt += 1
                 continue

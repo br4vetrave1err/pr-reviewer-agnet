@@ -1,4 +1,4 @@
-﻿# Implements: MOD-004, ARCH-003, SYS-003, REQ-004, REQ-010, REQ-014, REQ-NF-005, REQ-NF-006
+# Implements: MOD-004, ARCH-003, SYS-003, REQ-004, REQ-010, REQ-014, REQ-NF-005, REQ-NF-006
 """Queue Manager (MOD-004 / SYS-003).
 
 Enqueues review jobs with transactional dedup (REQ-004 / REQ-NF-005), kicks
@@ -72,14 +72,37 @@ class QueueManager:
         )
         inserted = self._state.insert_run(job)  # INSERT OR IGNORE dedup (REQ-004)
         if not inserted:
-            log.info("coalesced duplicate job %s/%s#%s", job.owner, job.repo, job.pr)
+            log.info(
+                "job_dedup_hit",
+                extra={
+                    "event": "job_dedup_hit",
+                    "run_id": job.run_id,
+                    "owner": job.owner,
+                    "repo": job.repo,
+                    "pr": job.pr,
+                    "head": job.head,
+                    "model": job.model,
+                },
+            )
             return EnqueueResult(run_id=job.run_id, duplicate=True, reason="dedup")
 
         self._ci_gate.watch(job)  # begin pending_ci wait (MOD-009)
         self._queued.add(job.run_id)
         self._queue.put_nowait(job)
         self._waker.set()
-        log.info("enqueued run %s (%s/%s#%s)", job.run_id, job.owner, job.repo, job.pr)
+        log.info(
+            "job_enqueued",
+            extra={
+                "event": "job_enqueued",
+                "run_id": job.run_id,
+                "owner": job.owner,
+                "repo": job.repo,
+                "pr": job.pr,
+                "head": job.head,
+                "model": job.model,
+                "cause": cause,
+            },
+        )
         return EnqueueResult(run_id=job.run_id)
 
     def put_back(self, job: ReviewJob) -> None:

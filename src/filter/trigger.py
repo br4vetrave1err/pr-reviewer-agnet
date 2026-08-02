@@ -1,4 +1,4 @@
-﻿# Implements: MOD-002, ARCH-002, SYS-002, REQ-002, REQ-003, REQ-013
+# Implements: MOD-002, ARCH-002, SYS-002, REQ-002, REQ-003, REQ-013
 """Trigger Decision Engine (MOD-002 / SYS-002).
 
 Decides whether an incoming event warrants a review: self-account authored
@@ -25,8 +25,24 @@ class TriggerDecisionEngine:
         self._self_account = self_account
 
     def decide(self, event: NormalizedEvent) -> Decision:
+        d = self._decide_inner(event)
+        log.info(
+            "trigger_decision",
+            extra={
+                "event": "trigger_decision",
+                "action": d.action,
+                "owner": d.owner,
+                "repo": d.repo,
+                "pr": d.pr,
+                "head": d.head,
+                "reason": d.reason,
+            },
+        )
+        return d
+
+    def _decide_inner(self, event: NormalizedEvent) -> Decision:
         if event.event == "issue_comment":
-            if event.author != self._self_account:
+            if self._self_account and event.author != self._self_account:
                 return Decision(action="skip", reason="not-self")
             try:
                 cmd = parse_command(event.comment_body or "")
@@ -57,14 +73,15 @@ class TriggerDecisionEngine:
         if event.pr_state in {"closed", "merged"}:
             return Decision(action="skip", reason="not-open")
 
-        is_author = event.author == self._self_account and event.action in {
-            "opened",
-            "ready_for_review",
-            "synchronize",
-        }
-        is_reviewer = event.action == "review_requested" and self._self_account in event.requested_reviewers
-        if not (is_author or is_reviewer):
-            return Decision(action="skip", reason="not-self")
+        if self._self_account:
+            is_author = event.author == self._self_account and event.action in {
+                "opened",
+                "ready_for_review",
+                "synchronize",
+            }
+            is_reviewer = event.action == "review_requested" and self._self_account in event.requested_reviewers
+            if not (is_author or is_reviewer):
+                return Decision(action="skip", reason="not-self")
 
         if not self._config.is_managed(event.owner, event.repo):
             return Decision(action="skip", reason="not-managed")  # REQ-003
