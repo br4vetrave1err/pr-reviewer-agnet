@@ -32,6 +32,12 @@ A continuously-running Docker service that acts as a PR review agent for a singl
 | REQ-015 | The system SHALL record every run (trigger, inputs, head SHA, model alias, outcome, timestamps) in structured logs and SHALL persist a run record per completed or failed review. | P2 | Auditability and debugging. | Inspection |
 | REQ-016 | Model provider definitions SHALL be defined once in the application layer (a single `providers` + `default_model` config section) and SHALL be switchable by configuration change only. | P2 | Model definition and runtime fallback. | Test |
 | REQ-017 | The review agent SHALL be given a defined agent skill set as the base for reviewing changes: `/code-review` (base skill), `/diagnosing-bugs`, and `/resolving-merge-conflicts`. | P2 | Minimal self-contained skill set. | Test |
+| REQ-018 | The system SHALL automatically ingest and trigger review pipelines for all Draft PRs authored by the configured self-account (`opened`, `synchronize`); Draft PRs authored by other accounts SHALL be ignored until marked `ready_for_review`. | P1 | User requirement for early feedback on draft PRs. | Test |
+| REQ-019 | The system SHALL send an out-of-band notification message formatted as a Slack Block Kit payload (summary preview, finding count, run ID, and approval action buttons/links) to a configured Slack Incoming Webhook URL (`SLACK_WEBHOOK_URL`) when a review reaches `pending_approval`. | P1 | Slack out-of-band communication for autonomous background runs. | Test |
+| REQ-020 | The system SHALL hold completed review findings in a `pending_approval` state before posting to GitHub, gating publication on explicit user approval. | P1 | Prevents posting unreviewed comments to GitHub PRs. | Test |
+| REQ-021 | The system SHALL support dual-channel approval for staged reviews via a GitHub PR comment (`@review approve`) OR an HTTP API endpoint (`POST /api/reviews/{run_id}/approve`). | P1 | Flexible approval mechanism. | Test |
+| REQ-022 | Upon user approval of a staged review for a self-authored Draft PR, the system SHALL submit the GitHub PR review with `event: APPROVE` AND convert/mark the Draft PR as `ready_for_review` via the GitHub API. | P1 | Auto-approval and ready-for-review promotion workflow. | Test |
+| REQ-023 | The system SHALL automatically cancel/invalidate a `pending_approval` review when a new `synchronize` commit is pushed to the PR, and SHALL expire unapproved staged reviews after 24 hours. | P2 | Prevents stale review posting on updated commits. | Test |
 
 ### Non-Functional Requirements
 
@@ -97,6 +103,6 @@ A continuously-running Docker service that acts as a PR review agent for a singl
 
 ---
 
-**Total Requirements**: 34 (34 active, 0 deprecated)
-**By Priority**: P1: 22 | P2: 12 | P3: 0
-**By Verification Method**: Test: 22 | Inspection: 9 | Analysis: 1 | Demonstration: 2
+**Total Requirements**: 40 (40 active, 0 deprecated)
+**By Priority**: P1: 27 | P2: 13 | P3: 0
+**By Verification Method**: Test: 28 | Inspection: 9 | Analysis: 1 | Demonstration: 2

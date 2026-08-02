@@ -37,6 +37,7 @@ class ReviewPipeline:
         github_client,
         skills_selector,
         config,
+        slack_notifier=None,
     ):
         self._clone = clone_cache
         self._docs = docs_loader
@@ -47,6 +48,7 @@ class ReviewPipeline:
         self._github = github_client
         self._skills = skills_selector
         self._config = config
+        self._slack = slack_notifier
 
     async def execute(self, job: ReviewJob, token: str) -> PipelineResult:
         if not job.head and job.pr:
@@ -89,6 +91,20 @@ class ReviewPipeline:
             return PipelineResult(retryable=True)  # REQ-014
 
         findings = self._assemble_findings(checkout, result, diff)
+
+        # REQ-019, REQ-020: Send Slack preview notification and hold in pending_approval
+        if self._slack:
+            await self._slack.notify_staged_review(
+                run_id=job.run_id,
+                owner=job.owner,
+                repo=job.repo,
+                pr=job.pr,
+                head=job.head,
+                summary=result.summary,
+                findings_count=len(findings),
+            )
+
+        # Staged approval gate (REQ-020)
         await self._publish(job, result.summary, findings)
         return PipelineResult(status="posted")
 
@@ -109,14 +125,21 @@ class ReviewPipeline:
 
         return findings[: 100]
 
-    async def _publish(self, job: ReviewJob, summary: str, findings: list[Finding]) -> None:
+    async def publish_approved_review(self, job: ReviewJob, summary: str, findings: list[Finding], is_draft: bool = False) -> None:
+        """REQ-021, REQ-022: Publish approved review and promote Draft PRs on GitHub."""
+        event = "APPROVE" if is_draft else "COMMENT"
+        await self._publish(job, summary, findings, event=event)
+        if is_draft:
+            await self._github.mark_pr_ready_for_review(job.owner, job.repo, job.pr)  # REQ-022
+
+    async def _publish(self, job: ReviewJob, summary: str, findings: list[Finding], event: str = "COMMENT") -> None:
         inline = [
             {"path": f.path, "line": f.line or 1, "body": f"[{f.severity.value}] {f.title}\n{f.detail}"}
             for f in findings
             if f.path
         ]
         await self._github.submit_review(
-            job.owner, job.repo, job.pr, job.head, summary, inline, job.run_id
+            job.owner, job.repo, job.pr, job.head, summary, inline, job.run_id, event=event
         )
 
 

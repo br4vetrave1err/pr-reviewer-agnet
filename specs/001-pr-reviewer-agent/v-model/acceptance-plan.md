@@ -576,17 +576,107 @@ This document defines the Acceptance Test Plan for the GitHub PR Review Agent. E
 
 ---
 
+### Requirement Validation: REQ-018 (Self-Authored Draft PR Ingress)
+
+#### Test Case: ATP-018-A (Draft PR filtering by author)
+
+**Description:** Draft PRs authored by the self-account are enqueued for review; Draft PRs from other authors are skipped until marked ready for review.
+
+* **User Scenario: SCN-018-A1**
+  * **Given** I open a Draft PR from my self-account
+  * **When** the `pull_request` webhook event arrives
+  * **Then** a review run is enqueued for my Draft PR
+* **User Scenario: SCN-018-A2**
+  * **Given** another user opens a Draft PR
+  * **When** the `pull_request` webhook event arrives
+  * **Then** the event is skipped with reason `not-self`
+
+---
+
+### Requirement Validation: REQ-019 (Slack Out-of-Band Notification)
+
+#### Test Case: ATP-019-A (Slack Block Kit preview notification)
+
+**Description:** When a review enters `pending_approval`, a Slack Block Kit formatted payload is sent to `SLACK_WEBHOOK_URL`.
+
+* **User Scenario: SCN-019-A1**
+  * **Given** a review analysis completes and enters `pending_approval`
+  * **When** the notifier triggers
+  * **Then** an HTTP POST request containing Slack Block Kit blocks, summary findings, and approval action links is delivered to `SLACK_WEBHOOK_URL`
+
+---
+
+### Requirement Validation: REQ-020 (Staged Preview Approval Gate)
+
+#### Test Case: ATP-020-A (Staged review publication gate)
+
+**Description:** Completed review findings are held in `pending_approval` state until explicit user confirmation is received.
+
+* **User Scenario: SCN-020-A1**
+  * **Given** a completed review run
+  * **When** it enters `pending_approval`
+  * **Then** no review comments are submitted to GitHub until explicit approval is granted
+
+---
+
+### Requirement Validation: REQ-021 (Dual-Channel Approval)
+
+#### Test Case: ATP-021-A (Approval via GitHub comment or API endpoint)
+
+**Description:** Staged reviews can be approved either by commenting `@review approve` on GitHub or calling `POST /api/reviews/{run_id}/approve`.
+
+* **User Scenario: SCN-021-A1**
+  * **Given** a pending staged review
+  * **When** I comment `@review approve` on the PR ticket
+  * **Then** the review state transitions from `pending_approval` to `posted` and comments are published to GitHub
+* **User Scenario: SCN-021-A2**
+  * **Given** a pending staged review
+  * **When** an HTTP request is sent to `POST /api/reviews/{run_id}/approve`
+  * **Then** the review is released and posted to GitHub
+
+---
+
+### Requirement Validation: REQ-022 (Draft PR Auto-Approval & Promotion)
+
+#### Test Case: ATP-022-A (Draft PR auto-approval and ready-for-review promotion)
+
+**Description:** Approving a staged review for a self-authored Draft PR submits the review with `event: APPROVE` and marks the PR as Ready for Review on GitHub.
+
+* **User Scenario: SCN-022-A1**
+  * **Given** an approved staged review for a self-authored Draft PR
+  * **When** the publisher executes
+  * **Then** the review is submitted with `event: APPROVE` and the GitHub API is called to promote the PR to Ready for Review
+
+---
+
+### Requirement Validation: REQ-023 (Stale Review Invalidation & Expiration)
+
+#### Test Case: ATP-023-A (Stale review invalidation on new commit & 24h timeout)
+
+**Description:** Pushing a new commit cancels outdated pending reviews; unapproved reviews expire after 24 hours.
+
+* **User Scenario: SCN-023-A1**
+  * **Given** a review pending approval for commit SHA-A
+  * **When** a `synchronize` event arrives for commit SHA-B
+  * **Then** the pending review for SHA-A is cancelled and a new review is queued for SHA-B
+* **User Scenario: SCN-023-A2**
+  * **Given** a review pending approval for > 24 hours
+  * **When** the expiration sweeper runs
+  * **Then** the pending review is marked expired and cleaned up
+
+---
+
 ## Coverage Summary
 
 | Metric | Count |
 |--------|-------|
-| Total Requirements (REQ) | 34 (34 active, 0 deprecated) |
-| Total Test Cases (ATP) | 35 (35 active, 0 deprecated, 0 suspect) |
-| Total Scenarios (SCN) | 61 |
-| Active Requirements with ≥1 ATP | 34 / 34 (100%) |
-| Test Cases with ≥1 SCN | 35 / 35 (100%) |
+| Total Requirements (REQ) | 40 (40 active, 0 deprecated) |
+| Total Test Cases (ATP) | 41 (41 active, 0 deprecated, 0 suspect) |
+| Total Scenarios (SCN) | 71 |
+| Active Requirements with ≥1 ATP | 40 / 40 (100%) |
+| Test Cases with ≥1 SCN | 41 / 41 (100%) |
 | **Overall Coverage** | **100%** (active items only) |
 
 ## Uncovered Requirements
 
-None â€” full coverage achieved.
+None — full coverage achieved.

@@ -92,6 +92,7 @@ def normalize_event(event: str, action: str, payload: dict) -> NormalizedEvent:
             ],
             pr_state=_parse_bool_or_state(pr.get("state") or pr.get("merged")),
             sender=sender,
+            draft=bool(pr.get("draft")),
         )
     if event == "issue_comment":
         comment = payload.get("comment") or {}

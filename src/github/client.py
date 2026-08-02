@@ -71,12 +71,13 @@ class GitHubClient:
         summary: str,
         inline_comments: list[dict],
         run_id: str,
+        event: str = "COMMENT",
     ) -> int:
-        """REQ-012: always event=COMMENT with the idempotency marker."""
+        """REQ-012, REQ-022: submit review event (COMMENT or APPROVE) with idempotency marker."""
         marker = f"\n\n<!-- review-run:{run_id} -->"
         payload = {
             "commit_id": head,
-            "event": "COMMENT",
+            "event": event,
             "body": summary + marker,  # REQ-IF-001 idempotency
             "comments": inline_comments,
         }
@@ -90,7 +91,7 @@ class GitHubClient:
             if inline_comments:
                 payload_no_inline = {
                     "commit_id": head,
-                    "event": "COMMENT",
+                    "event": event,
                     "body": summary + marker,
                 }
                 try:
@@ -102,6 +103,20 @@ class GitHubClient:
             await self.post_comment(owner, repo, pr, summary + marker)
             return 0
         return 0
+
+    async def mark_pr_ready_for_review(self, owner: str, repo: str, pr: int) -> bool:
+        """REQ-022: Mark/convert a draft PR to ready for review via GitHub API."""
+        url = f"{self._base}/repos/{owner}/{repo}/pulls/{pr}"
+        try:
+            resp = await self._client.patch(
+                url, json={"draft": False}, headers=self._headers()
+            )
+            if resp.status_code in (200, 201):
+                log.info("marked_pr_ready_for_review", extra={"owner": owner, "repo": repo, "pr": pr})
+                return True
+        except Exception as exc:
+            log.warning("failed to mark PR %s/%s#%s ready for review: %s", owner, repo, pr, exc)
+        return False
 
     async def fetch_pr_head(self, owner: str, repo: str, pr: int) -> str:
         url = f"{self._base}/repos/{owner}/{repo}/pulls/{pr}"

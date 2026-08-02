@@ -1,4 +1,4 @@
-﻿# Implements: MOD-001, MOD-002, MOD-003, MOD-007, MOD-008, MOD-009, MOD-010, MOD-012, MOD-014, MOD-019
+# Implements: MOD-001, MOD-002, MOD-003, MOD-007, MOD-008, MOD-009, MOD-010, MOD-012, MOD-014, MOD-019
 """Shared domain types for the PR Review Agent.
 
 Plain dataclasses shared across the module set. Every module carries its own
@@ -41,6 +41,7 @@ class NormalizedEvent:
     ci_status: Optional[str] = None
     pr_state: Optional[str] = None
     sender: Optional[str] = None
+    draft: bool = False
 
 
 @dataclass

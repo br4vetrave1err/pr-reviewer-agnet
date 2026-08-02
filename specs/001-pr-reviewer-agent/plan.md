@@ -28,7 +28,7 @@ Three concrete goals drive the work:
 
 **Language/Version**: Python 3.11+ / FastAPI (single `src/` package layout — unchanged)
 
-**Primary Dependencies**: stdlib `logging`, `logging.Filter`, `logging.Formatter` (no new pip dependencies); existing `httpx`, `asyncio`, `subprocess` instrumentation extended at call sites; GitHub REST API client (`httpx`), FastAPI (ASGI) + uvicorn, `aiosqlite`, `pydantic` + `pyyaml`, opencode CLI, gitleaks — all unchanged
+**Primary Dependencies**: stdlib `logging`, `logging.Filter`, `logging.Formatter` (no new pip dependencies); existing `httpx`, `asyncio`, `subprocess` instrumentation extended at call sites; GitHub REST API client (`httpx`), Slack Incoming Webhook Notifier (`httpx` + Slack Block Kit formatting), FastAPI (ASGI) + uvicorn, `aiosqlite`, `pydantic` + `pyyaml`, opencode CLI, gitleaks — all unchanged
 
 **Storage**: No new storage — existing `.runs/<id>/run.jsonl` run-record path is unchanged; new structured lines go to `stdout` only (Docker / docker compose captures natively via `PYTHONUNBUFFERED=1`)
 

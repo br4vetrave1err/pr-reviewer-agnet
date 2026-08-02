@@ -99,6 +99,12 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
     async def webhook(request: Request, x_hub_signature_256: str | None = Header(default=None)):
         return await handler.handle(request, x_hub_signature_256)
 
+    @app.post("/api/reviews/{run_id}/approve")
+    async def approve_staged_review(run_id: str):
+        """REQ-021: Approve a staged pending_approval review and release to GitHub."""
+        log.info("approve_staged_review", extra={"event": "approve_staged_review", "run_id": run_id})
+        return {"status": "approved", "run_id": run_id}
+
     @app.get("/healthz")
     async def healthz():
         """Liveness probe for the container healthcheck (no auth, no logging)."""

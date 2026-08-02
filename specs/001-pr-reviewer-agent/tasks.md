@@ -7,7 +7,7 @@ description: "Task list template for feature implementation"
 # Tasks: GitHub PR Review Agent
 
 <!-- v-model:traces
-  requirements: [REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-012, REQ-013, REQ-014, REQ-015, REQ-016, REQ-017, REQ-NF-001, REQ-NF-002, REQ-NF-003, REQ-NF-004, REQ-NF-005, REQ-NF-006, REQ-NF-007, REQ-IF-001, REQ-IF-002, REQ-IF-003, REQ-IF-004, REQ-IF-005, REQ-IF-006, REQ-CN-001, REQ-CN-002, REQ-CN-003, REQ-CN-004]
+  requirements: [REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-012, REQ-013, REQ-014, REQ-015, REQ-016, REQ-017, REQ-018, REQ-019, REQ-020, REQ-021, REQ-022, REQ-023, REQ-NF-001, REQ-NF-002, REQ-NF-003, REQ-NF-004, REQ-NF-005, REQ-NF-006, REQ-NF-007, REQ-IF-001, REQ-IF-002, REQ-IF-003, REQ-IF-004, REQ-IF-005, REQ-IF-006, REQ-CN-001, REQ-CN-002, REQ-CN-003, REQ-CN-004]
   system:       [SYS-001, SYS-002, SYS-003, SYS-004, SYS-005, SYS-006, SYS-007, SYS-008, SYS-009, SYS-010, SYS-011, SYS-012, SYS-013, SYS-014]
   architecture: [ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-006, ARCH-007, ARCH-008, ARCH-009, ARCH-010, ARCH-011, ARCH-012, ARCH-013]
   modules:      [MOD-001, MOD-002, MOD-003, MOD-004, MOD-005, MOD-006, MOD-007, MOD-008, MOD-009, MOD-010, MOD-011, MOD-012, MOD-013, MOD-014, MOD-015, MOD-016, MOD-017, MOD-018, MOD-019]
@@ -355,6 +355,19 @@ With multiple developers:
 
 ---
 
+## Phase 7: User Story 8 - Draft Ingress, Preview Gate & External Webhook Auto-Approval (Priority: P1)
+
+**Goal**: Ingest self-authored Draft PRs, gate review publication behind an out-of-band external webhook preview, support dual-channel approval (`@review approve` / API endpoint), auto-approve & promote Draft PRs on GitHub upon user approval, and auto-cancel/expire stale pending reviews.
+
+- [ ] T051 [P] [US8] Implement User Draft PR Ingress Filtering (MOD-002) in `src/filter/trigger.py` — filter pull_request events so that Draft PRs authored by the self-account are enqueued for review while Draft PRs by other authors are skipped <!-- traces-to: MOD-002 → ARCH-002 → SYS-002 → REQ-018 -->
+- [ ] T052 [P] [US8] Implement Slack Block Kit Webhook Notifier (MOD-017) in `src/observability/slack_notifier.py` — format and send Slack Block Kit messages containing review summary preview, run ID, and interactive approval buttons/links to `SLACK_WEBHOOK_URL` when a review reaches `pending_approval` <!-- traces-to: MOD-017 → ARCH-013 → SYS-014 → REQ-019 -->
+- [ ] T053 [P] [US8] Implement Staged Review Preview Gate (MOD-004, MOD-015) in `src/executor/pipeline.py` & `src/state/` — hold completed review findings in `pending_approval` state rather than posting directly to GitHub <!-- traces-to: MOD-004 → ARCH-003 → SYS-003 → REQ-020 -->
+- [ ] T054 [P] [US8] Implement Dual-Channel Approval Endpoint & Command Handler (MOD-001, MOD-002) in `src/webhook/app.py` & `src/filter/trigger.py` — handle `@review approve` comments and `POST /api/reviews/{run_id}/approve` API requests to release staged reviews <!-- traces-to: MOD-001 → ARCH-001 → SYS-001 → REQ-021 -->
+- [ ] T055 [P] [US8] Implement Draft PR Auto-Approval & Promotion (MOD-013) in `src/github/client.py` & `src/executor/pipeline.py` — on approval of a self-authored Draft PR review, submit GitHub review with `event: APPROVE` and call GitHub API (`markPullRequestReadyForReview`) to convert Draft PR to Ready for Review <!-- traces-to: MOD-013 → ARCH-009 → SYS-009 → REQ-022 -->
+- [ ] T056 [P] [US8] Implement Stale Invalidation & Expiration Sweeper (MOD-004, MOD-015) in `src/queue/manager.py` & `src/state/` — auto-cancel `pending_approval` reviews when a `synchronize` event arrives for a new head SHA, and expire unapproved reviews after 24 hours <!-- traces-to: MOD-004 → ARCH-003 → SYS-003 → REQ-023 -->
+
+---
+
 ## Notes
 
 - [P] tasks = different files, no dependencies
@@ -377,5 +390,6 @@ With multiple developers:
 | US5 — Re-review on new commits | MOD-004, 005 | UTP-004/005, ITP-003-B, STP-003, ATP-004 | TDD-ordered, P2 |
 | US6 — Always-COMMENT advisory reviews and failure reporting | MOD-004, 013 | UTP-013/018, ITP-012/013, STP-003-B/014, ATP-012/014 | TDD-ordered, P3 |
 | US7 — Observability Enhancement | MOD-001, 004, 005, 006, 008, 009, 011, 012, 013, 017 | test_json_formatter, test_healthz_filter, test_service_log_events, test_healthz_throttle | TDD-ordered, P1 |
+| US8 — Draft Ingress, Preview Gate & External Webhook Auto-Approval | MOD-001, 002, 004, 013, 015, 017 | test_draft_ingress, test_webhook_notifier, test_approval_gate, test_auto_approve | TDD-ordered, P1 |
 
 Hazard-driven elevation skipped — `hazard-analysis.md` absent. Full traceability via `v-model/traceability-matrix.md` (all four matrices 100%, no gaps).

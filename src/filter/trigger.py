@@ -73,6 +73,9 @@ class TriggerDecisionEngine:
         if event.pr_state in {"closed", "merged"}:
             return Decision(action="skip", reason="not-open")
 
+        if event.draft and self._self_account and event.author != self._self_account:
+            return Decision(action="skip", reason="draft-not-self")  # REQ-018
+
         if self._self_account:
             is_author = event.author == self._self_account and event.action in {
                 "opened",
