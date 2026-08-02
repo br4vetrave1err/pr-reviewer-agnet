@@ -98,123 +98,124 @@ class WorkspaceRunner:
             },
         )
 
-        _t0 = time.monotonic()
+        def _exec_sync() -> ReviewResult:
+            _t0 = time.monotonic()
+            try:
+                if hasattr(subprocess.run, "__pytest_wrapped__") or type(subprocess.run).__module__ != "subprocess":
+                    proc = subprocess.run(
+                        cmd_argv,
+                        cwd=checkout,
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                        timeout=self._timeout,
+                    )
+                    duration_ms = int((time.monotonic() - _t0) * 1000)
+                    if proc.stderr:
+                        for _line in proc.stderr.splitlines():
+                            _log_agent_stream_line(_line)
+                    log.info(
+                        "runner_exit",
+                        extra={
+                            "event": "runner_exit",
+                            "exit_code": proc.returncode,
+                            "duration_ms": duration_ms,
+                            "retryable": self._is_retryable(proc.returncode) if proc.returncode != 0 else False,
+                            "stdout_bytes": len(proc.stdout),
+                            "stderr_bytes": len(proc.stderr),
+                        },
+                    )
+                    if proc.returncode != 0:
+                        return ReviewResult(exit_code=proc.returncode, retryable=self._is_retryable(proc.returncode))
+                    return self._parse_result(proc.stdout)
 
-        try:
-            if hasattr(subprocess.run, "__pytest_wrapped__") or type(subprocess.run).__module__ != "subprocess":
-                # ---- test / mock path: capture_output=True ----
-                proc = subprocess.run(
+                proc = subprocess.Popen(
                     cmd_argv,
                     cwd=checkout,
                     env=env,
-                    capture_output=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
                     text=True,
-                    timeout=self._timeout,
+                    bufsize=1,
                 )
-                duration_ms = int((time.monotonic() - _t0) * 1000)
-                if proc.stderr:
-                    for _line in proc.stderr.splitlines():
-                        _log_agent_stream_line(_line)
-                log.info(
-                    "runner_exit",
-                    extra={
-                        "event": "runner_exit",
-                        "exit_code": proc.returncode,
-                        "duration_ms": duration_ms,
-                        "retryable": self._is_retryable(proc.returncode) if proc.returncode != 0 else False,
-                        "stdout_bytes": len(proc.stdout),
-                        "stderr_bytes": len(proc.stderr),
-                    },
-                )
-                if proc.returncode != 0:
-                    return ReviewResult(exit_code=proc.returncode, retryable=self._is_retryable(proc.returncode))
-                return self._parse_result(proc.stdout)
+                stdout_lines: list[str] = []
+                stderr_lines: list[str] = []
 
-            # ---- production path: streaming Popen ----
-            proc = subprocess.Popen(
-                cmd_argv,
-                cwd=checkout,
-                env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-            )
-            stdout_lines: list[str] = []
-            stderr_lines: list[str] = []
+                def _stream_err():
+                    for line in proc.stderr:
+                        stderr_lines.append(line)
+                        _log_agent_stream_line(line)
 
-            def _stream_err():
-                for line in proc.stderr:
-                    stderr_lines.append(line)
-                    _log_agent_stream_line(line)
+                def _stream_out():
+                    for line in proc.stdout:
+                        stdout_lines.append(line)
 
-            def _stream_out():
-                for line in proc.stdout:
-                    stdout_lines.append(line)
+                t_err = threading.Thread(target=_stream_err, daemon=True)
+                t_out = threading.Thread(target=_stream_out, daemon=True)
+                t_err.start()
+                t_out.start()
 
-            t_err = threading.Thread(target=_stream_err, daemon=True)
-            t_out = threading.Thread(target=_stream_out, daemon=True)
-            t_err.start()
-            t_out.start()
+                try:
+                    proc.wait(timeout=self._timeout)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    t_err.join(timeout=2.0)
+                    t_out.join(timeout=2.0)
+                    duration_ms = int((time.monotonic() - _t0) * 1000)
+                    log.error(
+                        "runner_exit",
+                        extra={
+                            "event": "runner_exit",
+                            "exit_code": 124,
+                            "duration_ms": duration_ms,
+                            "retryable": True,
+                            "reason": "timeout",
+                            "timeout_s": self._timeout,
+                        },
+                    )
+                    return ReviewResult(exit_code=124, retryable=True)
 
-            try:
-                proc.wait(timeout=self._timeout)
-            except subprocess.TimeoutExpired:
-                proc.kill()
                 t_err.join(timeout=2.0)
                 t_out.join(timeout=2.0)
+
+                stdout_text = "".join(stdout_lines)
+                stderr_text = "".join(stderr_lines)
+
+            except FileNotFoundError:
                 duration_ms = int((time.monotonic() - _t0) * 1000)
                 log.error(
                     "runner_exit",
                     extra={
                         "event": "runner_exit",
-                        "exit_code": 124,
+                        "exit_code": 127,
                         "duration_ms": duration_ms,
                         "retryable": True,
-                        "reason": "timeout",
-                        "timeout_s": self._timeout,
+                        "reason": "binary_not_found",
+                        "binary": runner_bin,
                     },
                 )
-                return ReviewResult(exit_code=124, retryable=True)
+                return ReviewResult(exit_code=127, retryable=True)
 
-            t_err.join(timeout=2.0)
-            t_out.join(timeout=2.0)
-
-            stdout_text = "".join(stdout_lines)
-            stderr_text = "".join(stderr_lines)
-
-        except FileNotFoundError:
             duration_ms = int((time.monotonic() - _t0) * 1000)
-            log.error(
+            log.info(
                 "runner_exit",
                 extra={
                     "event": "runner_exit",
-                    "exit_code": 127,
+                    "exit_code": proc.returncode,
                     "duration_ms": duration_ms,
-                    "retryable": True,
-                    "reason": "binary_not_found",
-                    "binary": runner_bin,
+                    "retryable": self._is_retryable(proc.returncode) if proc.returncode != 0 else False,
+                    "stdout_bytes": len(stdout_text),
+                    "stderr_bytes": len(stderr_text),
                 },
             )
-            return ReviewResult(exit_code=127, retryable=True)  # ARCH-006 runner-failure
 
-        duration_ms = int((time.monotonic() - _t0) * 1000)
-        log.info(
-            "runner_exit",
-            extra={
-                "event": "runner_exit",
-                "exit_code": proc.returncode,
-                "duration_ms": duration_ms,
-                "retryable": self._is_retryable(proc.returncode) if proc.returncode != 0 else False,
-                "stdout_bytes": len(stdout_text),
-                "stderr_bytes": len(stderr_text),
-            },
-        )
+            if proc.returncode != 0:
+                return ReviewResult(exit_code=proc.returncode, retryable=self._is_retryable(proc.returncode))
 
-        if proc.returncode != 0:
-            return ReviewResult(exit_code=proc.returncode, retryable=self._is_retryable(proc.returncode))
+            return self._parse_result(stdout_text)
 
-        return self._parse_result(stdout_text)
+        import asyncio
+        return await asyncio.to_thread(_exec_sync)
 
     async def security_step(self, prompt: str) -> ReviewResult:
         """Security step run in-session (MOD-012); same invocation shape."""
