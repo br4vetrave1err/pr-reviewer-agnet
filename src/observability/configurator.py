@@ -13,6 +13,11 @@ _LOG_RECORD_BUILTINS = {
     'processName', 'process', 'message'
 }
 
+def _is_redacted(key: str) -> bool:
+    lk = key.lower()
+    return any(rk in lk for rk in _REDACT_KEYS)
+
+
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         obj = {
@@ -23,8 +28,25 @@ class JsonFormatter(logging.Formatter):
         }
         for k, v in record.__dict__.items():
             if k not in _LOG_RECORD_BUILTINS and not k.startswith('_'):
-                obj[k] = '[REDACTED]' if k.lower() in _REDACT_KEYS else v
+                obj[k] = '[REDACTED]' if _is_redacted(k) else v
         return json.dumps(obj, ensure_ascii=False, default=str)
+
+
+class HumanReadableFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        ts = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(record.created))
+        level = record.levelname
+        service = record.name
+        msg = record.getMessage()
+
+        extras = []
+        for k, v in record.__dict__.items():
+            if k not in _LOG_RECORD_BUILTINS and not k.startswith('_'):
+                val = '[REDACTED]' if _is_redacted(k) else v
+                extras.append(f"{k}={val}")
+
+        extra_str = f" | {' '.join(extras)}" if extras else ""
+        return f"[{ts}] [{level:<5}] [{service}] {msg}{extra_str}"
 
 class HealthzFilter(logging.Filter):
     def __init__(self, interval_s: int = HEALTHZ_LOG_INTERVAL_S):
@@ -49,13 +71,21 @@ class HealthzFilter(logging.Filter):
 
 class LoggingConfigurator:
     @staticmethod
-    def configure() -> None:
+    def configure(fmt: str | None = None) -> None:
+        import os
         root = logging.getLogger('pr_reviewer')
         if root.handlers:
             return
         root.setLevel(logging.INFO)
         handler = logging.StreamHandler()
-        handler.setFormatter(JsonFormatter())
+
+        log_fmt = (fmt or os.environ.get('LOG_FORMAT', 'text')).lower()
+        if log_fmt == 'json':
+            formatter = JsonFormatter()
+        else:
+            formatter = HumanReadableFormatter()
+
+        handler.setFormatter(formatter)
         root.addHandler(handler)
 
         uvicorn_access = logging.getLogger('uvicorn.access')
