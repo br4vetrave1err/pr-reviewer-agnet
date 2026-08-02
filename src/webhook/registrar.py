@@ -65,6 +65,7 @@ class WebhookRegistrar:
         try:
             tunnel = await self.tunnel_public_url()
             log.info("ngrok_url_acquired", extra={"event": "ngrok_url_acquired", "public_url": tunnel})
+            await self.update_slack_manifest(tunnel)
         except Exception as exc:
             log.warning(
                 "ngrok_error",
@@ -113,3 +114,50 @@ class WebhookRegistrar:
         await self._github.update_webhook(owner, repo, int(hook["id"]), url=desired_url, secret=self._secret)
         log.info("re-pointed webhook %s for %s/%s -> %s", hook["id"], owner, repo, desired_url)
         return True
+
+    async def update_slack_manifest(self, public_url: str) -> bool:
+        """REQ-024, REQ-025: Programmatically update Slack App Manifest Request URLs via Slack API."""
+        import os
+        app_id = os.environ.get("SLACK_APP_ID")
+        token = os.environ.get("SLACK_USER_TOKEN") or os.environ.get("SLACK_API_TOKEN")
+        if not app_id or not token:
+            return False
+
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/x-www-form-urlencoded"}
+        try:
+            export_resp = await self._client.post(
+                "https://slack.com/api/apps.manifest.export",
+                data={"app_id": app_id},
+                headers=headers,
+            )
+            export_data = export_resp.json()
+            if not export_data.get("ok"):
+                log.warning("failed to export Slack manifest: %s", export_data.get("error"))
+                return False
+
+            manifest = export_data.get("manifest", {})
+            settings = manifest.setdefault("settings", {})
+
+            events = settings.setdefault("event_subscriptions", {})
+            events["request_url"] = f"{public_url.rstrip('/')}/api/slack/events"
+            if "bot_events" not in events:
+                events["bot_events"] = ["app_mention"]
+
+            interactivity = settings.setdefault("interactivity", {})
+            interactivity["is_enabled"] = True
+            interactivity["request_url"] = f"{public_url.rstrip('/')}/api/slack/interactivity"
+
+            import json
+            update_resp = await self._client.post(
+                "https://slack.com/api/apps.manifest.update",
+                data={"app_id": app_id, "manifest": json.dumps(manifest)},
+                headers=headers,
+            )
+            update_data = update_resp.json()
+            if update_data.get("ok"):
+                log.info("slack_manifest_updated", extra={"event": "slack_manifest_updated", "public_url": public_url})
+                return True
+            log.warning("failed to update Slack manifest: %s", update_data.get("error"))
+        except Exception as exc:
+            log.warning("failed to auto-update Slack manifest: %s", exc)
+        return False
