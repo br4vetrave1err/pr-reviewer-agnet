@@ -26,17 +26,17 @@ from domain import Finding, ReviewResult, Severity
 log = logging.getLogger("pr_reviewer.runner.workspace")
 
 
-def _log_opencode_stream_line(line: str) -> None:
+def _log_agent_stream_line(line: str) -> None:
     text = line.rstrip()
     if not text:
         return
     lower = text.lower()
     if "level=error" in lower or "level=fatal" in lower or "error:" in lower:
-        log.error("[opencode:error] %s", text)
+        log.error("[agent:error] %s", text)
     elif "level=warn" in lower or "level=warning" in lower or "warning:" in lower:
-        log.warning("[opencode:warn] %s", text)
+        log.warning("[agent:warn] %s", text)
     else:
-        log.info("[opencode:info] %s", text)
+        log.info("[agent:info] %s", text)
 
 
 @dataclass
@@ -86,9 +86,9 @@ class WorkspaceRunner:
         cmd_argv = [a for a in argv if a != "--non-interactive"]
 
         log.info(
-            "opencode_spawn",
+            "runner_spawn",
             extra={
-                "event": "opencode_spawn",
+                "event": "runner_spawn",
                 "runner_type": runner_type,
                 "model": model.alias,
                 "model_spec": model_spec,
@@ -114,11 +114,11 @@ class WorkspaceRunner:
                 duration_ms = int((time.monotonic() - _t0) * 1000)
                 if proc.stderr:
                     for _line in proc.stderr.splitlines():
-                        _log_opencode_stream_line(_line)
+                        _log_agent_stream_line(_line)
                 log.info(
-                    "opencode_exit",
+                    "runner_exit",
                     extra={
-                        "event": "opencode_exit",
+                        "event": "runner_exit",
                         "exit_code": proc.returncode,
                         "duration_ms": duration_ms,
                         "retryable": self._is_retryable(proc.returncode) if proc.returncode != 0 else False,
@@ -146,7 +146,7 @@ class WorkspaceRunner:
             def _stream_err():
                 for line in proc.stderr:
                     stderr_lines.append(line)
-                    _log_opencode_stream_line(line)
+                    _log_agent_stream_line(line)
 
             def _stream_out():
                 for line in proc.stdout:
@@ -165,9 +165,9 @@ class WorkspaceRunner:
                 t_out.join(timeout=2.0)
                 duration_ms = int((time.monotonic() - _t0) * 1000)
                 log.error(
-                    "opencode_exit",
+                    "runner_exit",
                     extra={
-                        "event": "opencode_exit",
+                        "event": "runner_exit",
                         "exit_code": 124,
                         "duration_ms": duration_ms,
                         "retryable": True,
@@ -186,9 +186,9 @@ class WorkspaceRunner:
         except FileNotFoundError:
             duration_ms = int((time.monotonic() - _t0) * 1000)
             log.error(
-                "opencode_exit",
+                "runner_exit",
                 extra={
-                    "event": "opencode_exit",
+                    "event": "runner_exit",
                     "exit_code": 127,
                     "duration_ms": duration_ms,
                     "retryable": True,
@@ -196,13 +196,13 @@ class WorkspaceRunner:
                     "binary": runner_bin,
                 },
             )
-            return ReviewResult(exit_code=127, retryable=True)  # ARCH-006 opencode-failure
+            return ReviewResult(exit_code=127, retryable=True)  # ARCH-006 runner-failure
 
         duration_ms = int((time.monotonic() - _t0) * 1000)
         log.info(
-            "opencode_exit",
+            "runner_exit",
             extra={
-                "event": "opencode_exit",
+                "event": "runner_exit",
                 "exit_code": proc.returncode,
                 "duration_ms": duration_ms,
                 "retryable": self._is_retryable(proc.returncode) if proc.returncode != 0 else False,
@@ -224,9 +224,9 @@ class WorkspaceRunner:
         cmd_argv = [a for a in argv if a != "--non-interactive"]
 
         log.info(
-            "opencode_spawn",
+            "runner_spawn",
             extra={
-                "event": "opencode_spawn",
+                "event": "runner_spawn",
                 "runner_type": "security_step",
                 "model": "default",
                 "cwd": "(inherited)",
@@ -240,9 +240,9 @@ class WorkspaceRunner:
         except subprocess.TimeoutExpired:
             duration_ms = int((time.monotonic() - _t0) * 1000)
             log.error(
-                "opencode_exit",
+                "runner_exit",
                 extra={
-                    "event": "opencode_exit",
+                    "event": "runner_exit",
                     "runner_type": "security_step",
                     "exit_code": 124,
                     "duration_ms": duration_ms,
@@ -254,9 +254,9 @@ class WorkspaceRunner:
         except FileNotFoundError:
             duration_ms = int((time.monotonic() - _t0) * 1000)
             log.error(
-                "opencode_exit",
+                "runner_exit",
                 extra={
-                    "event": "opencode_exit",
+                    "event": "runner_exit",
                     "runner_type": "security_step",
                     "exit_code": 127,
                     "duration_ms": duration_ms,
@@ -269,11 +269,11 @@ class WorkspaceRunner:
         duration_ms = int((time.monotonic() - _t0) * 1000)
         if proc.stderr:
             for _line in proc.stderr.splitlines():
-                log.info("[opencode:stderr] %s", _line)
+                _log_agent_stream_line(_line)
         log.info(
-            "opencode_exit",
+            "runner_exit",
             extra={
-                "event": "opencode_exit",
+                "event": "runner_exit",
                 "runner_type": "security_step",
                 "exit_code": proc.returncode,
                 "duration_ms": duration_ms,
@@ -326,9 +326,9 @@ class WorkspaceRunner:
         except json.JSONDecodeError as exc:
             summary_text = stdout.strip() or "Automated code review completed by PR Reviewer Agent."
             log.warning(
-                "opencode_parse_fallback",
+                "runner_parse_fallback",
                 extra={
-                    "event": "opencode_parse_fallback",
+                    "event": "runner_parse_fallback",
                     "reason": str(exc),
                     "stdout_preview": stdout[:500],
                     "fallback": "plain_text_summary",
@@ -347,9 +347,9 @@ class WorkspaceRunner:
             for f in data.get("findings", [])
         ]
         log.info(
-            "opencode_parse_ok",
+            "runner_parse_ok",
             extra={
-                "event": "opencode_parse_ok",
+                "event": "runner_parse_ok",
                 "findings_count": len(findings),
                 "has_summary": bool(data.get("summary")),
             },
