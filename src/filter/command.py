@@ -1,4 +1,4 @@
-﻿# Implements: MOD-003, ARCH-002, SYS-011, REQ-013
+# Implements: MOD-003, ARCH-002, SYS-011, REQ-013
 """Comment Command Parser (MOD-003 / SYS-011).
 
 Parses PR comment commands ``@review --model <alias>``. A body with no
@@ -13,7 +13,7 @@ import re
 
 from domain import Command
 
-_HAS_TOKEN_RE = re.compile(r"@review\b", re.IGNORECASE)
+_HAS_TOKEN_RE = re.compile(r"(@review|\breview\b|<@[\w-]+>)", re.IGNORECASE)
 _MODEL_RE = re.compile(r"--model\s+(\S+)", re.IGNORECASE)
 _FLAG_RE = re.compile(r"--[\w-]+")
 

@@ -137,19 +137,25 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
             event = body.get("event", {})
             if event.get("type") in {"app_mention", "message"}:
                 text = str(event.get("text", ""))
-                log.info("slack_event_received", extra={"event": "slack_event", "text": text})
+                channel_id = str(event.get("channel", ""))
+                log.info("slack_event_received", extra={"event": "slack_event", "text": text, "channel": channel_id})
                 import re
                 from domain import NormalizedEvent
                 from queue.manager import ReviewJob
                 match = re.search(r"#?(\d+)", text)
                 if match:
                     pr_num = int(match.group(1))
+                    target_repo = config.repo_config[0] if config.repo_config else None
+                    owner_name = target_repo.owner if target_repo else self_account
+                    repo_name = target_repo.repo if target_repo else ""
                     if "approve" in text.lower():
-                        job = state.get_job(f"slack_{pr_num}") or ReviewJob(run_id=f"slack_{pr_num}", owner=self_account, repo="", pr=pr_num, head="")
+                        await slack.send_message(f"🚀 *Approved PR #{pr_num}!* Merging on GitHub...", channel=channel_id)
+                        job = state.get_job(f"slack_{pr_num}") or ReviewJob(run_id=f"slack_{pr_num}", owner=owner_name, repo=repo_name, pr=pr_num, head="")
                         asyncio.create_task(pipeline.publish_approved_review(job, summary="Approved via Slack Event", findings=[], is_draft=True, auto_merge=True))
                     else:
+                        await slack.send_message(f"👀 *Received review command for PR #{pr_num} (`{owner_name}/{repo_name}`)!* Initiating pipeline run...", channel=channel_id)
                         norm_event = NormalizedEvent(
-                            event="issue_comment", action="created", owner=self_account, repo="",
+                            event="issue_comment", action="created", owner=owner_name, repo=repo_name,
                             pr_number=pr_num, head_sha="", author=self_account, comment_body=text
                         )
                         asyncio.create_task(dispatcher.dispatch(norm_event))

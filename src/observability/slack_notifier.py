@@ -18,8 +18,9 @@ log = logging.getLogger("pr_reviewer.observability.slack")
 
 
 class SlackNotifier:
-    def __init__(self, webhook_url: Optional[str] = None, httpx_client: Optional[httpx.AsyncClient] = None):
+    def __init__(self, webhook_url: Optional[str] = None, bot_token: Optional[str] = None, httpx_client: Optional[httpx.AsyncClient] = None):
         self._webhook_url = webhook_url or os.environ.get("SLACK_WEBHOOK_URL", "")
+        self._bot_token = bot_token or os.environ.get("SLACK_BOT_TOKEN", "")
         self._client = httpx_client or httpx.AsyncClient()
 
     def _base_url(self) -> str:
@@ -176,4 +177,26 @@ class SlackNotifier:
             return resp.status_code == 200
         except Exception as exc:
             log.warning("failed to send Slack approval confirmation for %s: %s", run_id, exc)
+            return False
+
+    async def send_message(self, text: str, channel: Optional[str] = None) -> bool:
+        """Send a plain text or markdown message to Slack via Webhook or Bot Token."""
+        if self._bot_token and channel:
+            headers = {"Authorization": f"Bearer {self._bot_token}", "Content-Type": "application/json"}
+            payload = {"channel": channel, "text": text}
+            try:
+                resp = await self._client.post("https://slack.com/api/chat.postMessage", json=payload, headers=headers, timeout=10.0)
+                if resp.status_code == 200 and resp.json().get("ok"):
+                    return True
+            except Exception as exc:
+                log.warning("failed to send Slack chat message: %s", exc)
+
+        if not self._webhook_url:
+            return False
+        payload = {"text": text}
+        try:
+            resp = await self._client.post(self._webhook_url, json=payload, timeout=10.0)
+            return resp.status_code == 200
+        except Exception as exc:
+            log.warning("failed to send Slack webhook message: %s", exc)
             return False
