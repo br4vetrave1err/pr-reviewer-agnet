@@ -139,7 +139,43 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
                 match = re.search(r"#?(\d+)", clean_text)
                 if match:
                     pr_num = int(match.group(1))
-                    target_repo = config.repo_config[0] if config.repo_config else None
+                    enabled_repos = [r for r in config.repo_config if r.enabled]
+                    
+                    # 1. Check if a specific repo name was mentioned in clean_text
+                    matched_repo = None
+                    lower_clean = clean_text.lower()
+                    for r in enabled_repos:
+                        if r.repo.lower() in lower_clean or f"{r.owner}/{r.repo}".lower() in lower_clean:
+                            matched_repo = r
+                            break
+
+                    # 2. If multiple repos exist and no repo was explicitly mentioned, ask user via Block Kit buttons
+                    if matched_repo is None and len(enabled_repos) > 1:
+                        elements = []
+                        for r in enabled_repos[:5]:  # limit to 5 buttons max
+                            elements.append({
+                                "type": "button",
+                                "text": {"type": "plain_text", "text": f"{r.owner}/{r.repo}", "emoji": True},
+                                "value": f"select_repo_{r.owner}/{r.repo}_{pr_num}"
+                            })
+                        blocks = [
+                            {
+                                "type": "section",
+                                "text": {
+                                    "type": "mrkdwn",
+                                    "text": f"❓ *Multiple repositories configured.* Please select which repository to review PR #{pr_num} for:"
+                                }
+                            },
+                            {
+                                "type": "actions",
+                                "elements": elements
+                            }
+                        ]
+                        log.info("slack_repo_selection_prompt", extra={"event": "slack_repo_selection_prompt", "pr": pr_num})
+                        asyncio.create_task(slack.send_blocks(blocks, text=f"Specify repository for PR #{pr_num}", channel=channel_id))
+                        return
+
+                    target_repo = matched_repo or (enabled_repos[0] if enabled_repos else None)
                     owner_name = target_repo.owner if target_repo else self_account
                     repo_name = target_repo.repo if target_repo else ""
                     log.info(
@@ -153,7 +189,7 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
                         },
                     )
                     if "approve" in text.lower():
-                        asyncio.create_task(slack.send_message(f"🚀 *Approved PR #{pr_num}!* Merging on GitHub...", channel=channel_id))
+                        asyncio.create_task(slack.send_message(f"🚀 *Approved PR #{pr_num} (`{owner_name}/{repo_name}`)!* Merging on GitHub...", channel=channel_id))
                         job = state.get_job(f"slack_{pr_num}") or ReviewJob(run_id=f"slack_{pr_num}", owner=owner_name, repo=repo_name, pr=pr_num, head="")
                         asyncio.create_task(pipeline.publish_approved_review(job, summary="Approved via Slack Event", findings=[], is_draft=True, auto_merge=True))
                     else:
@@ -169,7 +205,24 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
             if actions:
                 value = str(actions[0].get("value", ""))
                 log.info("slack_interactivity_action", extra={"action_value": value})
-                if value.startswith("approve_"):
+                if value.startswith("select_repo_"):
+                    # Format: select_repo_{owner}/{repo}_{pr}
+                    rest = value.replace("select_repo_", "")
+                    parts = rest.rsplit("_", 1)
+                    if len(parts) == 2:
+                        full_repo, pr_str = parts[0], parts[1]
+                        pr_num = int(pr_str)
+                        owner_name, repo_name = full_repo.split("/", 1) if "/" in full_repo else (self_account, full_repo)
+                        channel_id = str(body.get("container", {}).get("channel_id", "")) or None
+                        asyncio.create_task(slack.send_message(f"👀 *Received review command for PR #{pr_num} (`{owner_name}/{repo_name}`)!* Initiating pipeline run...", channel=channel_id))
+                        from domain import NormalizedEvent
+                        norm_event = NormalizedEvent(
+                            event="issue_comment", action="created", owner=owner_name, repo=repo_name,
+                            pr_number=pr_num, head_sha="", author=self_account, comment_body=f"review #{pr_num}"
+                        )
+                        asyncio.create_task(dispatcher.dispatch(norm_event))
+
+                elif value.startswith("approve_"):
                     run_id = value.replace("approve_", "")
                     from queue.manager import ReviewJob
                     job = state.get_job(run_id) or ReviewJob(run_id=run_id, owner=self_account, repo="", pr=1, head="")

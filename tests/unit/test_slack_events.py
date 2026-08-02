@@ -56,3 +56,32 @@ def test_slack_interactivity_button_click(client):
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     assert resp.status_code == 200
+
+
+def test_slack_event_explicit_repo_command(client):
+    """Test app_mention event callback parsing with explicit repo name."""
+    payload = {
+        "type": "event_callback",
+        "event": {
+            "type": "app_mention",
+            "text": "<@U123456> review developer-roadmap #1",
+            "channel": "C123456",
+        },
+    }
+    resp = client.post("/api/slack/events", json=payload)
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok"}
+
+
+def test_slack_interactivity_select_repo_click(client):
+    """Test repo selection Block Kit button click processing."""
+    payload_json = (
+        '{"type": "block_actions", "actions": [{"value": "select_repo_br4vetrave1err/developer-roadmap_1"}]}'
+    )
+    resp = client.post(
+        "/api/slack/interactivity",
+        data={"payload": payload_json},
+        headers={"content-type": "application/x-www-form-urlencoded"},
+    )
+    assert resp.status_code == 200
+

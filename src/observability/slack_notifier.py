@@ -204,3 +204,30 @@ class SlackNotifier:
         except Exception as exc:
             log.warning("failed to send Slack webhook message: %s", exc)
             return False
+
+    async def send_blocks(self, blocks: list, text: str = "PR Review Notification", channel: Optional[str] = None) -> bool:
+        """Send a Block Kit formatted message to Slack."""
+        resolved_channel = channel or os.environ.get("SLACK_CHANNEL_ID", "")
+        if self._bot_token and resolved_channel:
+            headers = {"Authorization": f"Bearer {self._bot_token}", "Content-Type": "application/json"}
+            payload = {"channel": resolved_channel, "text": text, "blocks": blocks}
+            try:
+                resp = await self._client.post("https://slack.com/api/chat.postMessage", json=payload, headers=headers, timeout=10.0)
+                data = resp.json()
+                if resp.status_code == 200 and data.get("ok"):
+                    log.info("slack_bot_blocks_sent", extra={"event": "slack_bot_blocks_sent", "channel": resolved_channel})
+                    return True
+                log.warning("slack chat.postMessage blocks failed: %s", data.get("error"))
+            except Exception as exc:
+                log.warning("failed to send Slack blocks message: %s", exc)
+
+        if not self._webhook_url:
+            return False
+        payload = {"text": text, "blocks": blocks}
+        try:
+            resp = await self._client.post(self._webhook_url, json=payload, timeout=10.0)
+            return resp.status_code == 200
+        except Exception as exc:
+            log.warning("failed to send Slack webhook blocks message: %s", exc)
+            return False
+
