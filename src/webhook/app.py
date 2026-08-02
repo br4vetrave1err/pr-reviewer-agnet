@@ -160,11 +160,11 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
                         },
                     )
                     if "approve" in text.lower():
-                        await slack.send_message(f"🚀 *Approved PR #{pr_num}!* Merging on GitHub...", channel=channel_id)
+                        asyncio.create_task(slack.send_message(f"🚀 *Approved PR #{pr_num}!* Merging on GitHub...", channel=channel_id))
                         job = state.get_job(f"slack_{pr_num}") or ReviewJob(run_id=f"slack_{pr_num}", owner=owner_name, repo=repo_name, pr=pr_num, head="")
                         asyncio.create_task(pipeline.publish_approved_review(job, summary="Approved via Slack Event", findings=[], is_draft=True, auto_merge=True))
                     else:
-                        await slack.send_message(f"👀 *Received review command for PR #{pr_num} (`{owner_name}/{repo_name}`)!* Initiating pipeline run...", channel=channel_id)
+                        asyncio.create_task(slack.send_message(f"👀 *Received review command for PR #{pr_num} (`{owner_name}/{repo_name}`)!* Initiating pipeline run...", channel=channel_id))
                         norm_event = NormalizedEvent(
                             event="issue_comment", action="created", owner=owner_name, repo=repo_name,
                             pr_number=pr_num, head_sha="", author=self_account, comment_body=text
