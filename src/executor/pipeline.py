@@ -137,13 +137,20 @@ class ReviewPipeline:
             summary = "Approved via Slack"
             findings = []
 
+        repo_spec = next(
+            (r for r in self._config.repo_config if r.owner == job.owner and r.repo == job.repo),
+            None,
+        )
+        should_auto_merge = auto_merge and (repo_spec.auto_merge if repo_spec else True)
+
         event = "APPROVE" if is_draft else "COMMENT"
         await self._publish(job, summary, findings or [], event=event)
         if is_draft:
             await self._github.mark_pr_ready_for_review(job.owner, job.repo, job.pr)  # REQ-022
         merged = False
-        if auto_merge:
+        if should_auto_merge:
             merged = await self._github.merge_pr(job.owner, job.repo, job.pr)
+
         if self._slack:
             await self._slack.notify_review_approved_and_promoted(
                 run_id=job.run_id, owner=job.owner, repo=job.repo, pr=job.pr, is_draft=is_draft, merged=merged

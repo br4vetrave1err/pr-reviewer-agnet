@@ -33,6 +33,8 @@ class RepoSpec:
     repo: str
     default_model: Optional[str] = None
     enabled: bool = True
+    require_approval: bool = False
+    auto_merge: bool = True
 
 
 @dataclass
@@ -148,6 +150,8 @@ def validate(raw: Any) -> Config:
                 repo=str(entry["repo"]),
                 default_model=entry.get("default_model"),
                 enabled=bool(entry.get("enabled", True)),
+                require_approval=bool(entry.get("require_approval", False)),
+                auto_merge=bool(entry.get("auto_merge", True)),
             )
         )
 

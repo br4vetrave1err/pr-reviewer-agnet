@@ -25,6 +25,8 @@ repo_config:             # managed repos — webhook registration is the allow (
     repo: Dobbe-AI
     default_model: free
     enabled: true
+    require_approval: true
+    auto_merge: false
 
   - owner: br4vetrave1err
     repo: enlightenment
