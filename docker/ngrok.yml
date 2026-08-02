@@ -11,4 +11,5 @@ tunnels:
   webhook:
     proto: http
     addr: app:8080
+    domain: 519e-103-98-190-86.ngrok-free.app
     inspect: false
