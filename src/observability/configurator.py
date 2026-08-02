@@ -3,6 +3,10 @@ import json
 import logging
 import time
 
+from datetime import datetime, timezone, timedelta
+
+IST = timezone(timedelta(hours=5, minutes=30))
+
 HEALTHZ_LOG_INTERVAL_S = 900
 
 _REDACT_KEYS = {'token', 'secret', 'password', 'authorization', 'auth', 'key', 'api_key', 'apikey'}
@@ -20,8 +24,9 @@ def _is_redacted(key: str) -> bool:
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
+        dt_ist = datetime.fromtimestamp(record.created, tz=timezone.utc).astimezone(IST)
         obj = {
-            'ts': int(record.created * 1000),
+            'ts': dt_ist.strftime('%Y-%m-%d %H:%M:%S IST'),
             'level': record.levelname,
             'service': record.name,
             'event': record.getMessage(),
@@ -34,7 +39,8 @@ class JsonFormatter(logging.Formatter):
 
 class HumanReadableFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        ts = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(record.created))
+        dt_ist = datetime.fromtimestamp(record.created, tz=timezone.utc).astimezone(IST)
+        ts = dt_ist.strftime('%Y-%m-%d %H:%M:%S IST')
         level = record.levelname
         service = record.name
         msg = record.getMessage()
@@ -47,6 +53,7 @@ class HumanReadableFormatter(logging.Formatter):
 
         extra_str = f" | {' '.join(extras)}" if extras else ""
         return f"[{ts}] [{level:<5}] [{service}] {msg}{extra_str}"
+
 
 class HealthzFilter(logging.Filter):
     def __init__(self, interval_s: int = HEALTHZ_LOG_INTERVAL_S):

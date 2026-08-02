@@ -13,6 +13,7 @@ services:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
+      - TZ=Asia/Kolkata
       - WEBHOOK_SECRET
       - GITHUB_TOKEN
       - OPENCODE_GO_TOKEN
