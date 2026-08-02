@@ -142,12 +142,23 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
                 import re
                 from domain import NormalizedEvent
                 from queue.manager import ReviewJob
-                match = re.search(r"#?(\d+)", text)
+                clean_text = re.sub(r"<@.*?>", "", text)
+                match = re.search(r"#?(\d+)", clean_text)
                 if match:
                     pr_num = int(match.group(1))
                     target_repo = config.repo_config[0] if config.repo_config else None
                     owner_name = target_repo.owner if target_repo else self_account
                     repo_name = target_repo.repo if target_repo else ""
+                    log.info(
+                        "slack_command_parsed",
+                        extra={
+                            "event": "slack_command_parsed",
+                            "pr": pr_num,
+                            "owner": owner_name,
+                            "repo": repo_name,
+                            "command": text,
+                        },
+                    )
                     if "approve" in text.lower():
                         await slack.send_message(f"🚀 *Approved PR #{pr_num}!* Merging on GitHub...", channel=channel_id)
                         job = state.get_job(f"slack_{pr_num}") or ReviewJob(run_id=f"slack_{pr_num}", owner=owner_name, repo=repo_name, pr=pr_num, head="")
