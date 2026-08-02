@@ -101,6 +101,7 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
         github,
         secret=os.environ.get(config.webhook_secret_env, ""),
         ngrok_agent_url=config.ngrok_agent_url,
+        slack_notifier=slack,
     )
     backfill = BootBackfill(config, github, trigger, dispatcher, state)
 

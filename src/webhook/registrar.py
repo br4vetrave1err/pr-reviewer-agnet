@@ -34,6 +34,7 @@ class WebhookRegistrar:
         ngrok_agent_url: str = "http://ngrok:4040",
         webhook_path: str = _WEBHOOK_PATH,
         httpx_client: httpx.AsyncClient | None = None,
+        slack_notifier: object | None = None,
     ):
         self._config = config
         self._github = github
@@ -41,6 +42,8 @@ class WebhookRegistrar:
         self._ngrok_agent = ngrok_agent_url.rstrip("/")
         self._webhook_path = webhook_path
         self._client = httpx_client or httpx.AsyncClient()
+        self._slack = slack_notifier
+        self._last_tunnel_url: str | None = None
 
     async def tunnel_public_url(self) -> str:
         """Return the app tunnel's current public HTTPS URL (REQ-CN-001, REQ-024)."""
@@ -65,7 +68,20 @@ class WebhookRegistrar:
         try:
             tunnel = await self.tunnel_public_url()
             log.info("ngrok_url_acquired", extra={"event": "ngrok_url_acquired", "public_url": tunnel})
-            await self.update_slack_manifest(tunnel)
+            if tunnel != self._last_tunnel_url:
+                old_url = self._last_tunnel_url
+                self._last_tunnel_url = tunnel
+                await self.update_slack_manifest(tunnel)
+                if self._slack and hasattr(self._slack, "send_message"):
+                    slack_events_url = f"{tunnel.rstrip('/')}/api/slack/events"
+                    slack_interactivity_url = f"{tunnel.rstrip('/')}/api/slack/interactivity"
+                    msg = (
+                        f"📢 *PR Review Agent Started / ngrok Tunnel Reconnected!*\n"
+                        f"• *Slack Events Request URL:* `{slack_events_url}`\n"
+                        f"• *Slack Interactivity URL:* `{slack_interactivity_url}`\n\n"
+                        f"⚠️ _If events stop responding, ensure this Request URL is saved under Event Subscriptions at api.slack.com!_"
+                    )
+                    await self._slack.send_message(msg)
         except Exception as exc:
             log.warning(
                 "ngrok_error",
