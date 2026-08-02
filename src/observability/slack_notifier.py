@@ -181,13 +181,17 @@ class SlackNotifier:
 
     async def send_message(self, text: str, channel: Optional[str] = None) -> bool:
         """Send a plain text or markdown message to Slack via Webhook or Bot Token."""
-        if self._bot_token and channel:
+        resolved_channel = channel or os.environ.get("SLACK_CHANNEL_ID", "")
+        if self._bot_token and resolved_channel:
             headers = {"Authorization": f"Bearer {self._bot_token}", "Content-Type": "application/json"}
-            payload = {"channel": channel, "text": text}
+            payload = {"channel": resolved_channel, "text": text}
             try:
                 resp = await self._client.post("https://slack.com/api/chat.postMessage", json=payload, headers=headers, timeout=10.0)
-                if resp.status_code == 200 and resp.json().get("ok"):
+                data = resp.json()
+                if resp.status_code == 200 and data.get("ok"):
+                    log.info("slack_bot_message_sent", extra={"event": "slack_bot_message_sent", "channel": resolved_channel})
                     return True
+                log.warning("slack chat.postMessage failed: %s", data.get("error"))
             except Exception as exc:
                 log.warning("failed to send Slack chat message: %s", exc)
 
