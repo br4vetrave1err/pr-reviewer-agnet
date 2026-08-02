@@ -125,15 +125,7 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
             return {"status": "approved", "run_id": run_id, "message": f"Review {run_id} approved! Auto-merging PR #{job.pr} on GitHub."}
         return {"status": "approved", "run_id": run_id, "message": "Review approval acknowledged."}
 
-    @app.post("/api/slack/events")
-    async def slack_events(request: Request):
-        """REQ-025: 2-Way Slack Events API endpoint (url_verification & app_mention commands)."""
-        try:
-            body = await request.json()
-        except Exception:
-            return {"status": "bad_request"}
-        if body.get("type") == "url_verification":
-            return {"challenge": body.get("challenge", "")}
+    async def _process_slack_event_payload(body: dict) -> None:
         if body.get("type") == "event_callback":
             event = body.get("event", {})
             if event.get("type") in {"app_mention", "message"}:
@@ -171,30 +163,48 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
                             pr_number=pr_num, head_sha="", author=self_account, comment_body=text
                         )
                         asyncio.create_task(dispatcher.dispatch(norm_event))
+
+        elif body.get("type") == "block_actions":
+            actions = body.get("actions", [])
+            if actions:
+                value = str(actions[0].get("value", ""))
+                log.info("slack_interactivity_action", extra={"action_value": value})
+                if value.startswith("approve_"):
+                    run_id = value.replace("approve_", "")
+                    from queue.manager import ReviewJob
+                    job = state.get_job(run_id) or ReviewJob(run_id=run_id, owner=self_account, repo="", pr=1, head="")
+                    asyncio.create_task(pipeline.publish_approved_review(job, summary="Approved via Slack Button", findings=[], is_draft=True, auto_merge=True))
+
+    from webhook.slack_socket import SlackSocketModeClient
+    socket_client = SlackSocketModeClient(
+        xapp_token=os.environ.get("SLACK_USER_TOKEN"),
+        event_handler=_process_slack_event_payload,
+    )
+
+    @app.post("/api/slack/events")
+    async def slack_events(request: Request):
+        """REQ-025: 2-Way Slack Events API endpoint (HTTP webhook fallback)."""
+        try:
+            body = await request.json()
+        except Exception:
+            return {"status": "bad_request"}
+        if body.get("type") == "url_verification":
+            return {"challenge": body.get("challenge", "")}
+        await _process_slack_event_payload(body)
         return {"status": "ok"}
 
     @app.post("/api/slack/interactivity")
     async def slack_interactivity(request: Request):
-        """REQ-025: 2-Way Slack Block Kit Interactivity payload endpoint."""
+        """REQ-025: 2-Way Slack Block Kit Interactivity endpoint (HTTP webhook fallback)."""
         raw_body = (await request.body()).decode("utf-8")
         import urllib.parse
         parsed = urllib.parse.parse_qs(raw_body)
         payload_list = parsed.get("payload", [])
         if payload_list:
-            payload_str = payload_list[0]
             import json
-            from queue.manager import ReviewJob
             try:
-                payload = json.loads(payload_str)
-                if payload.get("type") == "block_actions":
-                    actions = payload.get("actions", [])
-                    if actions:
-                        value = str(actions[0].get("value", ""))
-                        log.info("slack_interactivity_action", extra={"action_value": value})
-                        if value.startswith("approve_"):
-                            run_id = value.replace("approve_", "")
-                            job = state.get_job(run_id) or ReviewJob(run_id=run_id, owner=self_account, repo="", pr=1, head="")
-                            asyncio.create_task(pipeline.publish_approved_review(job, summary="Approved via Slack Button", findings=[], is_draft=True, auto_merge=True))
+                payload = json.loads(payload_list[0])
+                await _process_slack_event_payload(payload)
             except Exception as exc:
                 log.warning("failed to process Slack interactivity payload: %s", exc)
         return {"status": "ok"}
@@ -237,10 +247,12 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
         queue.reconcile(lease_ttl_seconds=0)  # ARCH-011 boot sweep: recover interrupted running jobs immediately
         app.state.worker_task = asyncio.create_task(worker.run())
         app.state.registrar_task = asyncio.create_task(_registrar_loop())
+        asyncio.create_task(socket_client.start())
         asyncio.create_task(backfill.run())
 
     @app.on_event("shutdown")
     async def shutdown() -> None:
+        await socket_client.stop()
         for name in ("worker_task", "registrar_task"):
             task = getattr(app.state, name, None)
             if task is not None:
