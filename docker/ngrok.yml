@@ -12,4 +12,3 @@ tunnels:
     proto: http
     addr: app:8080
     inspect: false
-    domain: 519e-103-98-190-86.ngrok-free.app
