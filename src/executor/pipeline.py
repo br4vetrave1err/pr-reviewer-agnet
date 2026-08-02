@@ -1,4 +1,4 @@
-﻿# Implements: MOD-006, MOD-007, MOD-008, MOD-009, MOD-010, MOD-011, MOD-012, MOD-013, ARCH-003, SYS-003
+# Implements: MOD-006, MOD-007, MOD-008, MOD-009, MOD-010, MOD-011, MOD-012, MOD-013, ARCH-003, SYS-003
 """Review pipeline (MOD-006..MOD-012 orchestration).
 
 Executes one claimed job through clone -> docs -> workspace run -> compliance
@@ -49,6 +49,12 @@ class ReviewPipeline:
         self._config = config
 
     async def execute(self, job: ReviewJob, token: str) -> PipelineResult:
+        if not job.head and job.pr:
+            try:
+                job.head = await self._github.fetch_pr_head(job.owner, job.repo, job.pr)
+            except Exception as exc:
+                log.warning("failed to fetch head SHA for PR %s/%s#%s: %s", job.owner, job.repo, job.pr, exc)
+
         try:
             checkout = self._clone.ensure(job.owner, job.repo, job.head, token)
         except Exception as exc:

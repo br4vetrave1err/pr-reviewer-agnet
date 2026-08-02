@@ -1,4 +1,4 @@
-﻿# Implements: MOD-016, ARCH-012, SYS-013, REQ-IF-004, REQ-016, REQ-017, REQ-CN-001
+# Implements: MOD-016, ARCH-012, SYS-013, REQ-IF-004, REQ-016, REQ-017, REQ-CN-001
 """Config loader and validator (MOD-016 / ARCH-012).
 
 Loads ``config.yaml`` and validates it fail-closed. Invalid configuration
@@ -55,6 +55,12 @@ class AgentSkillSet:
 
 
 @dataclass
+class RunnerSpec:
+    type: str = "opencode"
+    binary: str = "opencode"
+
+
+@dataclass
 class Config:
     providers: dict[str, ProviderSpec] = field(default_factory=dict)
     default_model: str = "free"
@@ -69,7 +75,9 @@ class Config:
     retry: RetrySpec = field(default_factory=RetrySpec)
     specs_docs_dir: str = "specs"
     workspace_cache_dir: str = "/var/agent_cache/repos"
+    ngrok_agent_url: str = "http://ngrok:4040"
     agent_skill_set: AgentSkillSet = field(default_factory=AgentSkillSet)
+    runner: RunnerSpec = field(default_factory=RunnerSpec)
     webhook_secret_env: str = "WEBHOOK_SECRET"
     github_token_env: str = "GITHUB_TOKEN"
 
@@ -165,6 +173,11 @@ def validate(raw: Any) -> Config:
         situational = []
     agent_skill_set = AgentSkillSet(base=str(base_skill), situational=[str(s) for s in situational])
 
+    runner_raw = raw.get("runner", {}) or {}
+    runner_type = str(runner_raw.get("type", "antigravity"))
+    runner_bin = str(runner_raw.get("binary", "agy" if runner_type in {"antigravity", "agy"} else "opencode"))
+    runner = RunnerSpec(type=runner_type, binary=runner_bin)
+
     webhook_secret = raw.get("webhook_secret")
     if webhook_secret is not None and len(str(webhook_secret)) < 16:
         errors.append("webhook_secret must be at least 16 characters")
@@ -189,7 +202,9 @@ def validate(raw: Any) -> Config:
         ),
         specs_docs_dir=str(raw.get("specs_docs_dir", "specs")),
         workspace_cache_dir=str(raw.get("workspace_cache_dir", "/var/agent_cache/repos")),
+        ngrok_agent_url=str(raw.get("ngrok_agent_url", "http://ngrok:4040")),
         agent_skill_set=agent_skill_set,
+        runner=runner,
         webhook_secret_env=str(raw.get("webhook_secret_env", "WEBHOOK_SECRET")),
         github_token_env=str(raw.get("github_token_env", "GITHUB_TOKEN")),
     )

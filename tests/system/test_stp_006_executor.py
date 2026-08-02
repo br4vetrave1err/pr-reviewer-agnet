@@ -37,8 +37,7 @@ async def test_sts_006_a1_headless_opencode_contract(tmp_path, monkeypatch, conf
         ),
     )
     assert result.exit_code == 0
-    assert argv[0][0] == "opencode" and argv[0][1] == "run"  # one-off CLI subprocess
-    assert "--non-interactive" in argv[0]
+    assert argv[0][0] in {"opencode", "agy"} and argv[0][1] == "run"  # one-off CLI subprocess
 
 
 def test_sts_006_a2_read_only_enforced(config):

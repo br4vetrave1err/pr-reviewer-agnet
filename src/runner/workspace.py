@@ -26,6 +26,19 @@ from domain import Finding, ReviewResult, Severity
 log = logging.getLogger("pr_reviewer.runner.workspace")
 
 
+def _log_opencode_stream_line(line: str) -> None:
+    text = line.rstrip()
+    if not text:
+        return
+    lower = text.lower()
+    if "level=error" in lower or "level=fatal" in lower or "error:" in lower:
+        log.error("[opencode:error] %s", text)
+    elif "level=warn" in lower or "level=warning" in lower or "warning:" in lower:
+        log.warning("[opencode:warn] %s", text)
+    else:
+        log.info("[opencode:info] %s", text)
+
+
 @dataclass
 class PromptContext:
     head: str
@@ -101,7 +114,7 @@ class WorkspaceRunner:
                 duration_ms = int((time.monotonic() - _t0) * 1000)
                 if proc.stderr:
                     for _line in proc.stderr.splitlines():
-                        log.info("[opencode:stderr] %s", _line)
+                        _log_opencode_stream_line(_line)
                 log.info(
                     "opencode_exit",
                     extra={
@@ -133,7 +146,7 @@ class WorkspaceRunner:
             def _stream_err():
                 for line in proc.stderr:
                     stderr_lines.append(line)
-                    log.info("[opencode:stderr] %s", line.rstrip())
+                    _log_opencode_stream_line(line)
 
             def _stream_out():
                 for line in proc.stdout:

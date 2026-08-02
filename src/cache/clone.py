@@ -1,4 +1,4 @@
-﻿# Implements: MOD-006, ARCH-004, SYS-004, REQ-005
+# Implements: MOD-006, ARCH-004, SYS-004, REQ-005
 """Clone Cache Manager (MOD-006 / SYS-004).
 
 Isolated per-repo clone workspace (``workspace_cache_dir``). Plain ``git
@@ -51,6 +51,9 @@ class CloneCacheManager:
             self._git_fetch(path, head)
             self._state.touch_repo(key, self._now())
 
+        # Always checkout the exact PR head commit so the working tree reflects
+        # the PR's changes, not the cached default branch (REQ-005).
+        self._git_checkout(path, head)
         self._evict_if_over_cap(path)
         return str(path)
 
@@ -72,8 +75,29 @@ class CloneCacheManager:
         )
 
     def _git_fetch(self, path: Path, head: str) -> None:
+        """Fetch the specific head commit; fall back to full fetch if SHA is not directly fetchable."""
+        try:
+            subprocess.run(
+                ["git", "-C", str(path), "fetch", "origin", head],
+                check=True,
+                capture_output=True,
+                text=True,
+                env=self._git_env(),
+            )
+        except subprocess.CalledProcessError:
+            # Some remotes do not support fetching by SHA; fetch all refs as fallback
+            subprocess.run(
+                ["git", "-C", str(path), "fetch", "--all"],
+                check=True,
+                capture_output=True,
+                text=True,
+                env=self._git_env(),
+            )
+
+    def _git_checkout(self, path: Path, head: str) -> None:
+        """Checkout the exact PR head commit (detached HEAD). No trailing -- to avoid path-restore mode."""
         subprocess.run(
-            ["git", "-C", str(path), "fetch", "origin", head],
+            ["git", "-C", str(path), "checkout", head],
             check=True,
             capture_output=True,
             text=True,

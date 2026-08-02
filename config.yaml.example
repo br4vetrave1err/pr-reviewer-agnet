@@ -36,6 +36,7 @@ retry:
 
 specs_docs_dir: specs    # docs context: <root>/specs/<owner>/<repo>/ (REQ-006)
 workspace_cache_dir: /var/agent_cache/repos   # isolated clone cache (REQ-005)
+ngrok_agent_url: http://ngrok:4040   # REQ-CN-001: tunnel discovery + webhook self-heal
 
 agent_skill_set:         # defined agent skill set (REQ-017)
   base: /code-review

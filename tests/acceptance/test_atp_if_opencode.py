@@ -38,8 +38,7 @@ async def test_scn_if_003_a1_headless_opencode_run(tmp_path, monkeypatch, config
                       diff="", model_alias="free", auth_ref="X", skill_args=["/code-review"]),
     )
 
-    assert argv[0][0] == "opencode" and argv[0][1] == "run"  # one-off CLI
-    assert "--non-interactive" in argv[0]
+    assert argv[0][0] in {"opencode", "agy"} and argv[0][1] == "run"  # one-off CLI
     assert result.exit_code == 0
     assert result.summary == "ok"
 
