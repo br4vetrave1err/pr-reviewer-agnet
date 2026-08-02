@@ -19,3 +19,5 @@ venv/
 # Runtime state (REQ-NF-007 run records, REQ-005 clone cache)
 .runs/
 .cache/
+*.db
+scratch/

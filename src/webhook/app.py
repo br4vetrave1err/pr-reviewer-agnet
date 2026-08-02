@@ -58,11 +58,12 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
     compliance = ComplianceValidator(".")
     scanner = SecurityScanRunner()
     llm = LlmSecurityReviewer(runner)
-    ci_gate = CiGateMonitor(github, state, config.ci_gate.settle_seconds, config.ci_gate.wait_cap_minutes)
-    queue = QueueManager(state, ci_gate, config.retry.max_attempts)
-    ci_gate.attach(queue)
     from observability.slack_notifier import SlackNotifier
     slack = SlackNotifier()
+
+    ci_gate = CiGateMonitor(github, state, config.ci_gate.settle_seconds, config.ci_gate.wait_cap_minutes, slack_notifier=slack)
+    queue = QueueManager(state, ci_gate, config.retry.max_attempts)
+    ci_gate.attach(queue)
 
     pipeline = ReviewPipeline(
         clone_cache, docs, runner, compliance, scanner, llm, github, skills, config, slack_notifier=slack
@@ -72,7 +73,7 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
         """Worker calls pipeline(job); token comes from the runtime env (ARCH-003)."""
         return pipeline.execute(job, token=os.environ.get("GITHUB_TOKEN", ""))
 
-    worker = WorkerScheduler(queue, _execute, config.retry.max_attempts)
+    worker = WorkerScheduler(queue, _execute, config.retry.max_attempts, concurrency=config.concurrency)
 
     async def _reply_post(decision):
         if decision.action == "notify-merged":
@@ -94,7 +95,7 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
 
     self_account = os.environ.get("PR_REVIEWER_ACCOUNT", "")
     trigger = TriggerDecisionEngine(config, self_account)
-    dispatcher = Dispatcher(trigger, queue, _reply_post)
+    dispatcher = Dispatcher(trigger, queue, _reply_post, slack_notifier=slack)
     handler = WebhookHandler(_secret_provider(config), dispatcher, self_account)
     registrar = WebhookRegistrar(
         config,
@@ -121,7 +122,7 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
             from queue.manager import ReviewJob
             job = ReviewJob(run_id=run_id, owner=owner, repo=repo, pr=pr, head="")
         if job:
-            asyncio.create_task(pipeline.publish_approved_review(job, summary="Review Approved via Agent", findings=[], is_draft=True, auto_merge=True))
+            asyncio.create_task(pipeline.publish_approved_review(job, summary="Review Approved via Agent", findings=[], is_draft=True, auto_merge=True, user_approved=True))
             return {"status": "approved", "run_id": run_id, "message": f"Review {run_id} approved! Auto-merging PR #{job.pr} on GitHub."}
         return {"status": "approved", "run_id": run_id, "message": "Review approval acknowledged."}
 
@@ -191,7 +192,7 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
                     if "approve" in text.lower():
                         asyncio.create_task(slack.send_message(f"🚀 *Approved PR #{pr_num} (`{owner_name}/{repo_name}`)!* Merging on GitHub...", channel=channel_id))
                         job = state.get_job(f"slack_{pr_num}") or ReviewJob(run_id=f"slack_{pr_num}", owner=owner_name, repo=repo_name, pr=pr_num, head="")
-                        asyncio.create_task(pipeline.publish_approved_review(job, summary="Approved via Slack Event", findings=[], is_draft=True, auto_merge=True))
+                        asyncio.create_task(pipeline.publish_approved_review(job, summary="Approved via Slack Event", findings=[], is_draft=True, auto_merge=True, user_approved=True))
                     else:
                         asyncio.create_task(slack.send_message(f"👀 *Received review command for PR #{pr_num} (`{owner_name}/{repo_name}`)!* Initiating pipeline run...", channel=channel_id))
                         norm_event = NormalizedEvent(
@@ -199,6 +200,14 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
                             pr_number=pr_num, head_sha="", author=self_account, comment_body=text
                         )
                         asyncio.create_task(dispatcher.dispatch(norm_event))
+                elif event.get("type") == "app_mention":
+                    asyncio.create_task(slack.send_message(
+                        "👋 *PR Reviewer Agent*: I review and approve existing GitHub PRs!\n\n"
+                        "• *Review a PR:* `@PR-Reviewer review #<PR_NUMBER>` (e.g. `@PR-Reviewer review #1`)\n"
+                        "• *Approve a PR:* `@PR-Reviewer approve #<PR_NUMBER>`\n\n"
+                        "_(Note: To create a new PR, please raise it on GitHub first, then tag me to review it!)_",
+                        channel=channel_id
+                    ))
 
         elif body.get("type") == "block_actions":
             actions = body.get("actions", [])
@@ -226,7 +235,7 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
                     run_id = value.replace("approve_", "")
                     from queue.manager import ReviewJob
                     job = state.get_job(run_id) or ReviewJob(run_id=run_id, owner=self_account, repo="", pr=1, head="")
-                    asyncio.create_task(pipeline.publish_approved_review(job, summary="Approved via Slack Button", findings=[], is_draft=True, auto_merge=True))
+                    asyncio.create_task(pipeline.publish_approved_review(job, summary="Approved via Slack Button", findings=[], is_draft=True, auto_merge=True, user_approved=True))
 
     from webhook.slack_socket import SlackSocketModeClient
     socket_client = SlackSocketModeClient(

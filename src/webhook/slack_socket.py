@@ -66,6 +66,7 @@ class SlackSocketModeClient:
                     while self._running:
                         try:
                             msg_str = await ws.recv()
+                            log.info("slack_socket_frame_received", extra={"event": "slack_socket_frame", "frame": msg_str[:300]})
                             msg = json.loads(msg_str)
                             msg_type = msg.get("type")
 
@@ -76,6 +77,7 @@ class SlackSocketModeClient:
 
                             if msg_type in {"events_api", "interactive"}:
                                 payload = msg.get("payload", {})
+                                log.info("slack_socket_payload_dispatch", extra={"event": "slack_socket_payload", "payload_type": payload.get("type")})
                                 if self._event_handler:
                                     if asyncio.iscoroutinefunction(self._event_handler):
                                         asyncio.create_task(self._event_handler(payload))
@@ -83,6 +85,9 @@ class SlackSocketModeClient:
                                         self._event_handler(payload)
                         except asyncio.CancelledError:
                             return
+                        except websockets.exceptions.ConnectionClosed:
+                            log.info("slack_socket_mode_disconnected", extra={"event": "slack_socket_mode_disconnected"})
+                            break
                         except Exception as exc:
                             log.warning("slack socket message processing error: %s", exc)
             except asyncio.CancelledError:

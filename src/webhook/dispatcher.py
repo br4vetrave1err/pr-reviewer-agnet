@@ -17,10 +17,11 @@ log = logging.getLogger("pr_reviewer.webhook.dispatcher")
 
 
 class Dispatcher:
-    def __init__(self, trigger, queue_manager, reply_post=None):
+    def __init__(self, trigger, queue_manager, reply_post=None, slack_notifier=None):
         self._trigger = trigger
         self._queue = queue_manager
         self._reply_post = reply_post  # async callable(Decision) -> None
+        self._slack = slack_notifier
 
     async def dispatch(self, event: NormalizedEvent) -> None:
         try:
@@ -33,7 +34,12 @@ class Dispatcher:
                  event.owner, event.repo, event.pr_number)
 
         if decision.action in {"enqueue", "advance-ci"}:
-            self._queue.enqueue(decision, cause="webhook")
+            result = self._queue.enqueue(decision, cause="webhook")
+            if self._slack and not result.duplicate:
+                pr_link = f"https://github.com/{decision.owner}/{decision.repo}/pull/{decision.pr}"
+                asyncio.create_task(self._slack.send_message(
+                    f"📥 *PR Review Event Received:* Enqueued review for <{pr_link}|*{decision.owner}/{decision.repo}#{decision.pr}*>. Checking CI status..."
+                ))
         elif decision.action in {"reply", "notify-merged"}:
             if self._reply_post is not None:
                 await self._reply_post(decision)

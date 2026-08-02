@@ -24,7 +24,7 @@ repo_config:             # managed repos — webhook registration is the allow (
   - owner: Dobbe-AI
     repo: Dobbe-AI
     default_model: free
-    enabled: true
+    enabled: false
     require_approval: true
     auto_merge: false
 
@@ -33,7 +33,7 @@ repo_config:             # managed repos — webhook registration is the allow (
     default_model: free
     enabled: true
 
-denylist: []             # subtracts within repo_config only (REQ-003)
+denylist: ["Dobbe-AI/Dobbe-AI"]             # subtracts within repo_config only (REQ-003)
 
 defaults:
   concurrency: 5         # up to 5 concurrent reviews (REQ-NF-006)

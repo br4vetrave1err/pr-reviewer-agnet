@@ -11,4 +11,5 @@ tunnels:
   webhook:
     proto: http
     addr: app:8080
+    domain: guided-moccasin-plainly.ngrok-free.app
     inspect: false

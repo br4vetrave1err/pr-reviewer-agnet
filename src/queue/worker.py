@@ -79,8 +79,17 @@ class WorkerScheduler:
                 elif result.retryable:
                     self._manager._state.set_status(job.run_id, "failed")
                     log.warning("run %s failed after %d attempts; posting partial", job.run_id, self._max_attempts)
+                    slack = getattr(self._manager, "_slack", None)
+                    if slack:
+                        await slack.notify_review_failed(job.run_id, job.owner, job.repo, job.pr, f"Retries exhausted ({self._max_attempts} attempts)")
                 else:
                     self._manager._state.set_status(job.run_id, result.status or "posted")
+            except Exception as exc:
+                self._manager._state.set_status(job.run_id, "failed")
+                log.error("unhandled exception in run %s: %s", job.run_id, exc)
+                slack = getattr(self._manager, "_slack", None)
+                if slack:
+                    await slack.notify_review_failed(job.run_id, job.owner, job.repo, job.pr, str(exc))
             finally:
                 self._active -= 1
                 duration_ms = int((time.monotonic() - t0) * 1000)

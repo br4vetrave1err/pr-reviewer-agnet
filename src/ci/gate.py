@@ -27,12 +27,14 @@ class CiGateMonitor:
         settle_seconds: int = 75,
         wait_cap_minutes: int = 60,
         poll_interval_seconds: int = 30,
+        slack_notifier=None,
     ):
         self._github = github
         self._state = state
         self._settle = settle_seconds
         self._cap = wait_cap_minutes * 60
         self._poll = poll_interval_seconds
+        self._slack = slack_notifier
         self._requeue = None  # set by attach(); re-enqueues jobs on gate pass
 
     def attach(self, queue) -> None:
@@ -173,6 +175,11 @@ class CiGateMonitor:
             await self._github.post_comment(
                 job.owner, job.repo, job.pr,
                 "CI failed for this head; logs were unavailable during diagnosis.",
+            )
+        if self._slack:
+            pr_link = f"https://github.com/{job.owner}/{job.repo}/pull/{job.pr}"
+            await self._slack.send_message(
+                f"❌ *CI Gate Failed:* CI checks failed for <{pr_link}|*{job.owner}/{job.repo}#{job.pr}*>. Posted diagnosis comment on GitHub."
             )
         log.info(
             "ci_gate_resolved",

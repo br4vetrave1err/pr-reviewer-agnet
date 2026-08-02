@@ -140,7 +140,7 @@ class FakeGithub:
     async def fetch_pr_diff(self, owner, repo, pr):
         return self.diff
 
-    async def submit_review(self, owner, repo, pr, head, summary, inline, run_id):
+    async def submit_review(self, owner, repo, pr, head, summary, inline, run_id, **kwargs):
         self.reviews.append({"summary": summary, "inline": inline, "run_id": run_id})
         self.posted += 1
         return self.posted

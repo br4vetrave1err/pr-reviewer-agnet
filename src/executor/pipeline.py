@@ -52,11 +52,23 @@ class ReviewPipeline:
         self._staged_reviews: dict[str, tuple[str, list[Finding]]] = {}
 
     async def execute(self, job: ReviewJob, token: str) -> PipelineResult:
-        if not job.head and job.pr:
+        # Check if PR is closed or merged before running (spec: closed/merged PR -> skip)
+        if job.owner and job.repo and job.pr:
             try:
-                job.head = await self._github.fetch_pr_head(job.owner, job.repo, job.pr)
+                pr_data = await self._github.fetch_pr(job.owner, job.repo, job.pr)
+                if pr_data.get("state") == "closed" or pr_data.get("merged") is True:
+                    log.info("pr_closed_or_merged_skipped", extra={"event": "pr_closed_or_merged_skipped", "run_id": job.run_id, "pr": job.pr})
+                    return PipelineResult(status="skipped")
+                if not job.head:
+                    job.head = (pr_data.get("head") or {}).get("sha") or ""
             except Exception as exc:
-                log.warning("failed to fetch head SHA for PR %s/%s#%s: %s", job.owner, job.repo, job.pr, exc)
+                log.warning("failed to fetch PR details for %s/%s#%s: %s", job.owner, job.repo, job.pr, exc)
+
+        if self._slack:
+            pr_link = f"https://github.com/{job.owner}/{job.repo}/pull/{job.pr}"
+            await self._slack.send_message(
+                f"⚙️ *PR Review Started:* Running review & security pipeline for <{pr_link}|*{job.owner}/{job.repo}#{job.pr}*>..."
+            )
 
         try:
             checkout = self._clone.ensure(job.owner, job.repo, job.head, token)
@@ -129,7 +141,15 @@ class ReviewPipeline:
 
         return findings[: 100]
 
-    async def publish_approved_review(self, job: ReviewJob, summary: str = "", findings: list[Finding] | None = None, is_draft: bool = True, auto_merge: bool = True) -> None:
+    async def publish_approved_review(
+        self,
+        job: ReviewJob,
+        summary: str = "",
+        findings: list[Finding] | None = None,
+        is_draft: bool = True,
+        auto_merge: bool = True,
+        user_approved: bool = False,
+    ) -> None:
         """REQ-021, REQ-022: Publish approved review, promote Draft PRs, and auto-merge PR on GitHub."""
         if job.run_id in self._staged_reviews:
             summary, findings = self._staged_reviews.pop(job.run_id)
@@ -137,10 +157,16 @@ class ReviewPipeline:
             summary = "Approved via Slack"
             findings = []
 
-        repo_spec = next(
-            (r for r in self._config.repo_config if r.owner == job.owner and r.repo == job.repo),
-            None,
-        )
+        repo_spec = getattr(self._config, "get_repo_spec", lambda o, r: next((spec for spec in self._config.repo_config if spec.owner == o and spec.repo == r), None))(job.owner, job.repo)
+
+        requires_user_approval = repo_spec.require_approval if repo_spec else False
+        if requires_user_approval and not user_approved:
+            log.warning(
+                "action_blocked_user_approval_required",
+                extra={"event": "action_blocked", "owner": job.owner, "repo": job.repo, "pr": job.pr},
+            )
+            return
+
         should_auto_merge = auto_merge and (repo_spec.auto_merge if repo_spec else True)
 
         event = "APPROVE" if is_draft else "COMMENT"

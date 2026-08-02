@@ -42,8 +42,8 @@ class SlackNotifier:
         approval_url: Optional[str] = None,
     ) -> bool:
         """Send Slack Block Kit preview message for a pending_approval review (REQ-019)."""
-        if not self._webhook_url:
-            log.warning("SLACK_WEBHOOK_URL not configured; skipping Slack preview notification for %s", run_id)
+        if not self._webhook_url and not self._bot_token:
+            log.warning("Neither SLACK_WEBHOOK_URL nor SLACK_BOT_TOKEN configured; skipping Slack preview notification for %s", run_id)
             return False
 
         app_url = approval_url or f"{self._base_url()}/api/reviews/{run_id}/approve?owner={owner}&repo={repo}&pr={pr}"
@@ -105,6 +105,9 @@ class SlackNotifier:
             ]
         }
 
+        if self._bot_token and os.environ.get("SLACK_CHANNEL_ID"):
+            return await self.send_blocks(payload["blocks"], text=f"🔍 PR Review Staged Preview: {owner}/{repo}#{pr}")
+
         try:
             resp = await self._client.post(self._webhook_url, json=payload, timeout=10.0)
             if resp.status_code == 200:
@@ -126,7 +129,7 @@ class SlackNotifier:
         merged: bool = False,
     ) -> bool:
         """Send Slack confirmation message when a PR review is approved, promoted, and merged on GitHub (REQ-022)."""
-        if not self._webhook_url:
+        if not self._webhook_url and not self._bot_token:
             return False
 
         pr_link = f"https://github.com/{owner}/{repo}/pull/{pr}"
@@ -172,12 +175,28 @@ class SlackNotifier:
             ]
         }
 
+        if self._bot_token and os.environ.get("SLACK_CHANNEL_ID"):
+            return await self.send_blocks(payload["blocks"], text=title)
+
         try:
             resp = await self._client.post(self._webhook_url, json=payload, timeout=10.0)
             return resp.status_code == 200
         except Exception as exc:
             log.warning("failed to send Slack approval confirmation for %s: %s", run_id, exc)
             return False
+
+    async def notify_review_failed(
+        self,
+        run_id: str,
+        owner: str,
+        repo: str,
+        pr: int,
+        reason: str = "Execution retries exhausted",
+    ) -> bool:
+        """Send Slack alert when a PR review run fails."""
+        pr_link = f"https://github.com/{owner}/{repo}/pull/{pr}" if owner and repo and pr else ""
+        text = f"⚠️ *PR Review Failed:* Review run for <{pr_link}|*{owner}/{repo}#{pr}*> failed.\n• *Reason:* {reason}\n• *Run ID:* `{run_id}`"
+        return await self.send_message(text)
 
     async def send_message(self, text: str, channel: Optional[str] = None) -> bool:
         """Send a plain text or markdown message to Slack via Webhook or Bot Token."""

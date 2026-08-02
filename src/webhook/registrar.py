@@ -71,17 +71,8 @@ class WebhookRegistrar:
             if tunnel != self._last_tunnel_url:
                 old_url = self._last_tunnel_url
                 self._last_tunnel_url = tunnel
-                await self.update_slack_manifest(tunnel)
                 if self._slack and hasattr(self._slack, "send_message"):
-                    slack_events_url = f"{tunnel.rstrip('/')}/api/slack/events"
-                    slack_interactivity_url = f"{tunnel.rstrip('/')}/api/slack/interactivity"
-                    msg = (
-                        f"📢 *PR Review Agent Started / ngrok Tunnel Reconnected!*\n"
-                        f"• *Slack Events Request URL:* `{slack_events_url}`\n"
-                        f"• *Slack Interactivity URL:* `{slack_interactivity_url}`\n\n"
-                        f"⚠️ _If events stop responding, ensure this Request URL is saved under Event Subscriptions at api.slack.com!_"
-                    )
-                    await self._slack.send_message(msg)
+                    await self._slack.send_message("📢 *PR Review Agent Started & Ready!*")
         except Exception as exc:
             log.warning(
                 "ngrok_error",

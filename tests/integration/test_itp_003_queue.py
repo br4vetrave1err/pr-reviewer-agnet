@@ -42,7 +42,7 @@ async def test_its_003_a2_full_pipeline_posts_review(state, config, tmp_path):
         async def fetch_pr_diff(self, owner, repo, pr):
             return "diff --git a/x.py b/x.py\n+print(1)\n"
 
-        async def submit_review(self, owner, repo, pr, head, summary, inline_comments, run_id):
+        async def submit_review(self, owner, repo, pr, head, summary, inline_comments, run_id, **kwargs):
             posted["summary"] = summary
             posted["inline"] = inline_comments
             return 123

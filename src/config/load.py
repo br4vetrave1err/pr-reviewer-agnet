@@ -94,6 +94,19 @@ class Config:
         prov = self.providers.get(alias)
         return bool(prov and prov.enabled)
 
+    def get_repo_spec(self, owner: str, repo: str) -> Optional[RepoSpec]:
+        return next((r for r in self.repo_config if r.owner == owner and r.repo == repo), None)
+
+    def requires_approval(self, owner: str, repo: str) -> bool:
+        spec = self.get_repo_spec(owner, repo)
+        return spec.require_approval if spec else False
+
+    def can_auto_merge(self, owner: str, repo: str) -> bool:
+        spec = self.get_repo_spec(owner, repo)
+        if spec and spec.require_approval:
+            return False
+        return spec.auto_merge if spec else False
+
 
 def validate(raw: Any) -> Config:
     """Validate a parsed config mapping and return a typed Config.

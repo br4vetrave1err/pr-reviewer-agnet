@@ -85,3 +85,18 @@ def test_slack_interactivity_select_repo_click(client):
     )
     assert resp.status_code == 200
 
+
+def test_slack_event_no_pr_number(client):
+    """Test app_mention without a PR number returns usage hint."""
+    payload = {
+        "type": "event_callback",
+        "event": {
+            "type": "app_mention",
+            "text": "<@U123456> can you raise a new PR with some test changes",
+            "channel": "C123456",
+        },
+    }
+    resp = client.post("/api/slack/events", json=payload)
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok"}
+
