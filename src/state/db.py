@@ -1,4 +1,4 @@
-﻿# Implements: MOD-015, ARCH-011, SYS-012, REQ-IF-005, REQ-NF-005, REQ-004, REQ-010, REQ-014, REQ-NF-001
+# Implements: MOD-015, ARCH-011, SYS-012, REQ-IF-005, REQ-NF-005, REQ-004, REQ-010, REQ-014, REQ-NF-001
 """State Repository (MOD-015 / SYS-012).
 
 SQLite database with WAL journal (REQ-IF-005) implementing the documented
@@ -28,8 +28,12 @@ class StateRepository:
     def __init__(self, db_path: str | Path, max_retries: int = 3):
         self._path = str(db_path)
         self._max_retries = max_retries
+        Path(self._path).parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(self._path, timeout=30, check_same_thread=False)
-        self._conn.execute("PRAGMA journal_mode=WAL")  # REQ-IF-005
+        try:
+            self._conn.execute("PRAGMA journal_mode=WAL")  # REQ-IF-005
+        except sqlite3.OperationalError:
+            self._conn.execute("PRAGMA journal_mode=DELETE")
         self._conn.execute("PRAGMA busy_timeout=30000")
         self._migrate()
 
@@ -79,16 +83,24 @@ class StateRepository:
     def insert_run(self, job: ReviewJob) -> bool:
         """INSERT OR IGNORE dedup (REQ-004); True if a row was inserted."""
         now = int(time.time())
+        if job.cause == "comment":
+            self._conn.execute(
+                "DELETE FROM review_runs WHERE owner = ? AND repo = ? AND pr = ?",
+                (job.owner, job.repo, job.pr),
+            )
         try:
             cur = self._conn.execute(
                 "INSERT OR IGNORE INTO review_runs "
                 "(run_id, owner, repo, pr, head, model, status, attempts, cause, created_at, updated_at) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (job.run_id, job.owner, job.repo, job.pr, job.head, job.model or "",
+                (job.run_id, job.owner, job.repo, job.pr, job.head or "", job.model or "",
                  job.status, job.attempts, job.cause, now, now),
             )
             self._conn.commit()
-            return cur.rowcount == 1
+            inserted = cur.rowcount == 1
+            if inserted:
+                log.info("DB insert_run: run_id=%s pr=%d status=%s cause=%s", job.run_id, job.pr, job.status, job.cause)
+            return inserted
         except sqlite3.OperationalError:
             self._retry(lambda: self.insert_run(job))
             return False
@@ -102,7 +114,10 @@ class StateRepository:
             (now, run_id),
         )
         self._conn.commit()
-        return cur.rowcount == 1
+        claimed = cur.rowcount == 1
+        if claimed:
+            log.info("DB claim_run: run_id=%s status=running", run_id)
+        return claimed
 
     def acquire_lease(self, run_id: str, lease_ttl_seconds: int = _LEASE_TTL) -> bool:
         """UTS-004-A3: re-acquire a lease whose timestamp is older than the TTL."""
@@ -113,7 +128,10 @@ class StateRepository:
             (int(time.time()), run_id, cutoff),
         )
         self._conn.commit()
-        return cur.rowcount == 1
+        acquired = cur.rowcount == 1
+        if acquired:
+            log.info("DB acquire_lease: run_id=%s status=running", run_id)
+        return acquired
 
     def set_status(self, run_id: str, status: str) -> None:
         assert status in _RUN_STATES, f"invalid run status {status!r}"
@@ -122,6 +140,15 @@ class StateRepository:
             (status, int(time.time()), run_id),
         )
         self._conn.commit()
+        log.info("DB set_status: run_id=%s status=%s", run_id, status)
+
+    def update_head(self, run_id: str, head: str) -> None:
+        self._conn.execute(
+            "UPDATE review_runs SET head=?, updated_at=? WHERE run_id=?",
+            (head, int(time.time()), run_id),
+        )
+        self._conn.commit()
+        log.info("DB update_head: run_id=%s head=%s", run_id, head)
 
     def get_run(self, run_id: str) -> ReviewJob:
         row = self._conn.execute(
@@ -136,13 +163,22 @@ class StateRepository:
             model=row[5], status=row[6], attempts=row[7], cause=row[8],
         )
 
-    def recover_orphans(self, lease_ttl_seconds: int = _LEASE_TTL) -> int:
+    def has_run_for_head(self, owner: str, repo: str, pr: int, head: str) -> bool:
+        """Check if a review run has already been recorded for a specific owner/repo/pr/head."""
+        row = self._conn.execute(
+            "SELECT 1 FROM review_runs WHERE owner=? AND repo=? AND pr=? AND head=?",
+            (owner, repo, pr, head),
+        ).fetchone()
+        return row is not None
+
+    def recover_orphans(self, lease_ttl_seconds: int = 3600) -> int:
         """Boot sweep: requeue `running` runs older than the lease TTL (ARCH-011)."""
-        cutoff = int(time.time()) - lease_ttl_seconds
+        now = int(time.time())
+        cutoff = now - lease_ttl_seconds
         cur = self._conn.execute(
             "UPDATE review_runs SET status='queued', updated_at=? "
-            "WHERE status='running' AND updated_at < ?",
-            (int(time.time()), cutoff),
+            "WHERE status='running' AND updated_at <= ?",
+            (now, cutoff),
         )
         self._conn.commit()
         return cur.rowcount

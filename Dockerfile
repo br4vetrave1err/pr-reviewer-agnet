@@ -33,7 +33,7 @@ COPY pyproject.toml ./
 COPY src ./src
 
 # Vendored agent skills (REQ-CN-003)
-COPY .agents/skills ./ .agents/skills/
+COPY .agents/skills/ ./.agents/skills/
 
 # Config: example shipped; real config.yaml + .env are mounted at runtime
 COPY config.yaml.example ./config.yaml.example
@@ -47,4 +47,4 @@ COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["uvicorn", "webhook.app:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "webhook.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080"]

@@ -35,6 +35,7 @@ from tests.compliance import ComplianceValidator
 from webhook.dispatcher import Dispatcher
 from webhook.handler import WebhookHandler, router
 from webhook.registrar import WebhookRegistrar
+from queue.backfill import BootBackfill
 from observability.configurator import LoggingConfigurator
 
 log = logging.getLogger("pr_reviewer.app")
@@ -89,6 +90,7 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
         secret=os.environ.get(config.webhook_secret_env, ""),
         ngrok_agent_url=config.ngrok_agent_url,
     )
+    backfill = BootBackfill(config, github, trigger, dispatcher, state)
 
     app = FastAPI(title="PR Review Agent")
     app.include_router(router)
@@ -135,6 +137,7 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
         queue.reconcile(lease_ttl_seconds=0)  # ARCH-011 boot sweep: recover interrupted running jobs immediately
         app.state.worker_task = asyncio.create_task(worker.run())
         app.state.registrar_task = asyncio.create_task(_registrar_loop())
+        asyncio.create_task(backfill.run())
 
     @app.on_event("shutdown")
     async def shutdown() -> None:

@@ -1,0 +1,57 @@
+# PR Review Agent configuration — copy to config.yaml (boot reads ./config.yaml).
+# Fail-closed: an invalid file refuses to boot (SCN-IF-004-A2).
+# Secrets are never stored here — only env-var NAMES via `auth_env` (REQ-NF-004).
+
+providers:               # single app-layer model definition (REQ-016)
+  free:    { provider: opencode, model: north-mini-code-free, enabled: true,  auth_env: OPENCODE_GO_TOKEN }
+  go:      { provider: opencode, model: deepseek-v4-pro,        enabled: true,  auth_env: OPENCODE_GO_TOKEN }
+  gemini:  { provider: google-one, model: gemini-2.5-pro,         enabled: true,  auth_env: OPENCODE_GO_TOKEN }
+  flash:   { provider: google-one, model: gemini-3.6-flash,       enabled: true,  auth_env: OPENCODE_GO_TOKEN }
+
+default_model: free     # active alias — change here, no code change (REQ-016)
+switch_default: free     # fallback alias on credit exhaustion (REQ-016)
+
+runner:                  # agent execution CLI layer
+  type: antigravity
+  binary: opencode
+
+repo_config:             # managed repos — webhook registration is the allow (REQ-003)
+  - owner: br4vetrave1err
+    repo: developer-roadmap
+    default_model: free
+    enabled: true
+
+  - owner: Dobbe-AI
+    repo: Dobbe-AI
+    default_model: free
+    enabled: true
+
+  - owner: br4vetrave1err
+    repo: enlightenment
+    default_model: free
+    enabled: true
+
+denylist: []             # subtracts within repo_config only (REQ-003)
+
+defaults:
+  concurrency: 5         # up to 5 concurrent reviews (REQ-NF-006)
+  disk_cap_bytes: 10737418240   # 10 GiB clone cache (REQ-005)
+  validator_filter_enabled: true
+
+ci_gate:                 # Rule B — green heads only (REQ-010)
+  enabled: true
+  settle_seconds: 0
+  wait_cap_minutes: 60
+
+reconcile_interval_seconds: 300
+
+retry:
+  max_attempts: 3        # initial + 2 retries, transient only (REQ-014)
+  backoff_seconds: [30, 120]
+
+specs_docs_dir: specs    # docs context: <root>/specs/<owner>/<repo>/ (REQ-006)
+workspace_cache_dir: /var/agent_cache/repos   # isolated clone cache (REQ-005)
+
+agent_skill_set:         # defined agent skill set (REQ-017)
+  base: /code-review
+  situational: [/diagnosing-bugs, /resolving-merge-conflicts]

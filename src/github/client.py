@@ -175,6 +175,14 @@ class GitHubClient:
             raise MalformedDataError(f"webhook list returned malformed payload for {owner}/{repo}")
         return data
 
+    async def list_open_prs(self, owner: str, repo: str) -> list[dict]:
+        """REQ-002: list open pull requests for a repository (boot backfill)."""
+        url = f"{self._base}/repos/{owner}/{repo}/pulls?state=open"
+        data = await self._retryable(lambda: self._client.get(url, headers=self._headers()))
+        if not isinstance(data, list):
+            return []
+        return data
+
     async def create_webhook(self, owner: str, repo: str, url: str, secret: str, events: set[str]) -> dict:
         """REQ-CN-001: register a webhook pointing at *url* for the managed repo."""
         endpoint = f"{self._base}/repos/{owner}/{repo}/hooks"
