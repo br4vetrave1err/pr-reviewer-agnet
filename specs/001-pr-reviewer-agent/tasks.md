@@ -256,6 +256,17 @@ description: "Task list template for feature implementation"
 - [ ] T132 [US7] Run unit tests for observability (`test_json_formatter.py`, `test_healthz_filter.py`, `test_service_log_events.py`) <!-- traces-to: MOD-017 → ARCH-013 → SYS-014 → REQ-015, REQ-NF-007 -->
 - [ ] T133 [US7] Integration test: `/healthz` probe log suppression (15-min window) in `tests/integration/test_healthz_throttle.py` <!-- traces-to: MOD-017 → ARCH-013 → SYS-014 → REQ-015, REQ-NF-007 -->
 
+### Phase 8: Dynamic Ngrok Webhook Sync & 2-Way Slack Integration (P1)
+
+**Goal**: Automatically register & update webhook URLs via ngrok local API (`http://localhost:4040/api/tunnels`) and enable 2-way Slack channel triggers & button interactivity (`/api/slack/events` & `/api/slack/interactivity`).
+
+- [ ] T057 [P] [US8] Implement Dynamic Ngrok URL Auto-Discovery & Webhook Auto-Sync in `src/webhook/registrar.py` <!-- traces-to: MOD-001 → ARCH-001 → SYS-014 → REQ-024 -->
+- [ ] T058 [P] [US8] Implement 2-Way Slack Events & Interactivity endpoints (`POST /api/slack/events`, `POST /api/slack/interactivity`) in `src/webhook/app.py` <!-- traces-to: MOD-001 → ARCH-001 → SYS-001 → REQ-025 -->
+- [ ] T059 [US8] Handle Slack `url_verification` challenge response token in `src/webhook/app.py` <!-- traces-to: MOD-001 → ARCH-001 → SYS-001 → REQ-025 -->
+- [ ] T060 [US8] Parse Slack `app_mention` events (e.g. `@PR-Reviewer review #1`) and Block Kit interactive button payloads in `src/webhook/app.py` <!-- traces-to: MOD-001, MOD-002 → ARCH-001, ARCH-002 → SYS-001, SYS-002 → REQ-025 -->
+- [ ] T061 [US8] Unit tests for Dynamic Ngrok Sync & 2-Way Slack Event Router in `tests/unit/test_slack_events.py` <!-- traces-to: MOD-001 → ARCH-001 → SYS-001, SYS-014 → REQ-024, REQ-025 -->
+- [ ] T062 [US8] Integration & E2E verification of 2-way Slack review triggers & auto-merges <!-- traces-to: MOD-001 → ARCH-001 → SYS-001 → REQ-024, REQ-025 -->
+
 ### Polish & Cross-Cutting
 
 - [ ] T097 [P] Documentation updates in `README.md` (docker compose quick start) <!-- traces-to: MOD-016 → ARCH-012 → SYS-013 → REQ-CN-001 -->

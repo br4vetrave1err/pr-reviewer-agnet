@@ -1,7 +1,7 @@
 # Implementation Plan: GitHub PR Review Agent — Observability Enhancement
 
 <!-- v-model:traces
-  requirements: [REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-012, REQ-013, REQ-014, REQ-015, REQ-016, REQ-017, REQ-NF-001, REQ-NF-002, REQ-NF-003, REQ-NF-004, REQ-NF-005, REQ-NF-006, REQ-NF-007, REQ-IF-001, REQ-IF-002, REQ-IF-003, REQ-IF-004, REQ-IF-005, REQ-IF-006, REQ-CN-001, REQ-CN-002, REQ-CN-003, REQ-CN-004]
+  requirements: [REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-012, REQ-013, REQ-014, REQ-015, REQ-016, REQ-017, REQ-018, REQ-019, REQ-020, REQ-021, REQ-022, REQ-023, REQ-024, REQ-025, REQ-NF-001, REQ-NF-002, REQ-NF-003, REQ-NF-004, REQ-NF-005, REQ-NF-006, REQ-NF-007, REQ-IF-001, REQ-IF-002, REQ-IF-003, REQ-IF-004, REQ-IF-005, REQ-IF-006, REQ-CN-001, REQ-CN-002, REQ-CN-003, REQ-CN-004]
   system:       [SYS-001, SYS-002, SYS-003, SYS-004, SYS-005, SYS-006, SYS-007, SYS-008, SYS-009, SYS-010, SYS-011, SYS-012, SYS-013, SYS-014]
   architecture: [ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-006, ARCH-007, ARCH-008, ARCH-009, ARCH-010, ARCH-011, ARCH-012, ARCH-013]
   modules:      [MOD-001, MOD-002, MOD-003, MOD-004, MOD-005, MOD-006, MOD-007, MOD-008, MOD-009, MOD-010, MOD-011, MOD-012, MOD-013, MOD-014, MOD-015, MOD-016, MOD-017, MOD-018, MOD-019]
@@ -284,6 +284,19 @@ logging:
     max-file: "3"
 ```
 
+## V-Model Trace Summary
+
+This plan encompasses the complete PR Reviewer Agent feature set across 42 requirements (`REQ-001` through `REQ-025`, plus non-functional, interface, and container constraints):
+
+- **Self-Authored Draft PR Ingress (`REQ-018`)**: Ingests draft PRs authored by the configured self-account (`PR_REVIEWER_ACCOUNT`) while ignoring draft PRs from other accounts until marked ready for review.
+- **Slack Out-of-Band Preview Notifications (`REQ-019`)**: Formats staged review previews as Slack Block Kit cards with finding counts, review summary snippets, and action buttons (`SLACK_WEBHOOK_URL`).
+- **Staged Preview Approval Gate (`REQ-020`)**: Holds completed review findings in a `pending_approval` state prior to GitHub publication.
+- **Dual-Channel Approval (`REQ-021`)**: Supports releasing reviews via a GitHub PR comment (`@review approve`) or HTTP API endpoint (`POST /api/reviews/{run_id}/approve`).
+- **Draft PR Auto-Approval & Promotion (`REQ-022`)**: Submits approved reviews with `event: APPROVE` and calls GitHub API (`markPullRequestReadyForReview`) to convert draft PRs to Ready for Review.
+- **Stale Review Invalidation & Expiration (`REQ-023`)**: Cancels pending reviews on new push (`synchronize`) and expires unapproved reviews after 24 hours.
+- **Dynamic Ngrok Webhook Auto-Registration (`REQ-024`)**: Queries ngrok local REST API (`http://localhost:4040/api/tunnels`) on startup and tunnel reconnects to dynamically discover public HTTPS URLs and auto-update webhook endpoints.
+- **2-Way Slack Events & Interactivity Integration (`REQ-025`)**: Exposes `/api/slack/events` and `/api/slack/interactivity` endpoints to process Slack `url_verification` challenges, `app_mention` commands, and interactive Block Kit button clicks directly from Slack conversations.
+
 ---
 
 --- v-model run summary ---
@@ -312,3 +325,4 @@ enrichment: full
 branch: master
 plan: specs/001-pr-reviewer-agent/plan.md
 --- end summary ---
+

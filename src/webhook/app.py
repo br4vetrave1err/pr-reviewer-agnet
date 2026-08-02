@@ -61,8 +61,11 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
     ci_gate = CiGateMonitor(github, state, config.ci_gate.settle_seconds, config.ci_gate.wait_cap_minutes)
     queue = QueueManager(state, ci_gate, config.retry.max_attempts)
     ci_gate.attach(queue)
+    from observability.slack_notifier import SlackNotifier
+    slack = SlackNotifier()
+
     pipeline = ReviewPipeline(
-        clone_cache, docs, runner, compliance, scanner, llm, github, skills, config
+        clone_cache, docs, runner, compliance, scanner, llm, github, skills, config, slack_notifier=slack
     )
 
     def _execute(job):
@@ -72,7 +75,16 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
     worker = WorkerScheduler(queue, _execute, config.retry.max_attempts)
 
     async def _reply_post(decision):
-        if decision.reason == "malformed-command":
+        if decision.action == "notify-merged":
+            await slack.notify_review_approved_and_promoted(
+                run_id=decision.head or "merged",
+                owner=decision.owner or "",
+                repo=decision.repo or "",
+                pr=decision.pr or 0,
+                is_draft=False,
+                merged=True,
+            )
+        elif decision.reason == "malformed-command":
             from filter.command import usage
             await github.post_comment(
                 decision.owner, decision.repo, decision.pr, usage(registry.valid_aliases())
@@ -100,10 +112,74 @@ def create_app(config_path: str = "config.yaml", db_path: str = ".runs/pr_review
         return await handler.handle(request, x_hub_signature_256)
 
     @app.post("/api/reviews/{run_id}/approve")
-    async def approve_staged_review(run_id: str):
-        """REQ-021: Approve a staged pending_approval review and release to GitHub."""
-        log.info("approve_staged_review", extra={"event": "approve_staged_review", "run_id": run_id})
-        return {"status": "approved", "run_id": run_id}
+    async def approve_staged_review(run_id: str, owner: str | None = None, repo: str | None = None, pr: int | None = None):
+        """REQ-021, REQ-022: Approve a staged pending_approval review, release to GitHub, and auto-merge."""
+        log.info("approve_staged_review", extra={"event": "approve_staged_review", "run_id": run_id, "owner": owner, "repo": repo, "pr": pr})
+        job = state.get_job(run_id)
+        if not job and owner and repo and pr:
+            from queue.manager import ReviewJob
+            job = ReviewJob(run_id=run_id, owner=owner, repo=repo, pr=pr, head="")
+        if job:
+            asyncio.create_task(pipeline.publish_approved_review(job, summary="Review Approved via Agent", findings=[], is_draft=True, auto_merge=True))
+            return {"status": "approved", "run_id": run_id, "message": f"Review {run_id} approved! Auto-merging PR #{job.pr} on GitHub."}
+        return {"status": "approved", "run_id": run_id, "message": "Review approval acknowledged."}
+
+    @app.post("/api/slack/events")
+    async def slack_events(request: Request):
+        """REQ-025: 2-Way Slack Events API endpoint (url_verification & app_mention commands)."""
+        try:
+            body = await request.json()
+        except Exception:
+            return {"status": "bad_request"}
+        if body.get("type") == "url_verification":
+            return {"challenge": body.get("challenge", "")}
+        if body.get("type") == "event_callback":
+            event = body.get("event", {})
+            if event.get("type") in {"app_mention", "message"}:
+                text = str(event.get("text", ""))
+                log.info("slack_event_received", extra={"event": "slack_event", "text": text})
+                import re
+                from domain import NormalizedEvent
+                from queue.manager import ReviewJob
+                match = re.search(r"#?(\d+)", text)
+                if match:
+                    pr_num = int(match.group(1))
+                    if "approve" in text.lower():
+                        job = state.get_job(f"slack_{pr_num}") or ReviewJob(run_id=f"slack_{pr_num}", owner=self_account, repo="", pr=pr_num, head="")
+                        asyncio.create_task(pipeline.publish_approved_review(job, summary="Approved via Slack Event", findings=[], is_draft=True, auto_merge=True))
+                    else:
+                        norm_event = NormalizedEvent(
+                            event="issue_comment", action="created", owner=self_account, repo="",
+                            pr_number=pr_num, head_sha="", author=self_account, comment_body=text
+                        )
+                        asyncio.create_task(dispatcher.dispatch(norm_event))
+        return {"status": "ok"}
+
+    @app.post("/api/slack/interactivity")
+    async def slack_interactivity(request: Request):
+        """REQ-025: 2-Way Slack Block Kit Interactivity payload endpoint."""
+        raw_body = (await request.body()).decode("utf-8")
+        import urllib.parse
+        parsed = urllib.parse.parse_qs(raw_body)
+        payload_list = parsed.get("payload", [])
+        if payload_list:
+            payload_str = payload_list[0]
+            import json
+            from queue.manager import ReviewJob
+            try:
+                payload = json.loads(payload_str)
+                if payload.get("type") == "block_actions":
+                    actions = payload.get("actions", [])
+                    if actions:
+                        value = str(actions[0].get("value", ""))
+                        log.info("slack_interactivity_action", extra={"action_value": value})
+                        if value.startswith("approve_"):
+                            run_id = value.replace("approve_", "")
+                            job = state.get_job(run_id) or ReviewJob(run_id=run_id, owner=self_account, repo="", pr=1, head="")
+                            asyncio.create_task(pipeline.publish_approved_review(job, summary="Approved via Slack Button", findings=[], is_draft=True, auto_merge=True))
+            except Exception as exc:
+                log.warning("failed to process Slack interactivity payload: %s", exc)
+        return {"status": "ok"}
 
     @app.get("/healthz")
     async def healthz():

@@ -43,14 +43,18 @@ class WebhookRegistrar:
         self._client = httpx_client or httpx.AsyncClient()
 
     async def tunnel_public_url(self) -> str:
-        """Return the app tunnel's current public HTTPS URL (REQ-CN-001)."""
+        """Return the app tunnel's current public HTTPS URL (REQ-CN-001, REQ-024)."""
+        import os
+        env_url = os.environ.get("PUBLIC_AGENT_URL") or os.environ.get("NGROK_PUBLIC_URL")
+        if env_url:
+            return env_url.rstrip("/")
         resp = await self._client.get(f"{self._ngrok_agent}{_NGROK_TUNNELS_API}")
         resp.raise_for_status()
         tunnels = resp.json().get("tunnels", [])
         https = [t for t in tunnels if t.get("proto") == "https" and t.get("public_url")]
         if not https:
             raise RuntimeError("no active ngrok tunnel")
-        return https[0]["public_url"]
+        return https[0]["public_url"].rstrip("/")
 
     async def reconcile(self) -> int:
         """Ensure all managed repos' webhooks point at the tunnel URL.

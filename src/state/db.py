@@ -78,6 +78,20 @@ class StateRepository:
         )
         self._conn.commit()
 
+    def get_job(self, run_id: str) -> Optional[ReviewJob]:
+        """Fetch a ReviewJob by run_id from state database."""
+        cur = self._conn.execute(
+            "SELECT run_id, owner, repo, pr, head, model, status, attempts, cause FROM review_runs WHERE run_id=?",
+            (run_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        return ReviewJob(
+            run_id=row[0], owner=row[1], repo=row[2], pr=row[3], head=row[4],
+            model=row[5], status=row[6], attempts=row[7], cause=row[8]
+        )
+
     # --- runs ---
 
     def insert_run(self, job: ReviewJob) -> bool:

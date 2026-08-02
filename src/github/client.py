@@ -118,6 +118,25 @@ class GitHubClient:
             log.warning("failed to mark PR %s/%s#%s ready for review: %s", owner, repo, pr, exc)
         return False
 
+    async def merge_pr(self, owner: str, repo: str, pr: int, merge_method: str = "squash") -> bool:
+        """REQ-022: Auto-merge approved Pull Request on GitHub with fallback merge methods."""
+        url = f"{self._base}/repos/{owner}/{repo}/pulls/{pr}/merge"
+        methods = list(dict.fromkeys([merge_method, "squash", "merge", "rebase"]))
+        for method in methods:
+            payload = {
+                "commit_title": f"Merge pull request #{pr} via PR Review Agent",
+                "merge_method": method,
+            }
+            try:
+                resp = await self._client.put(url, json=payload, headers=self._headers())
+                if resp.status_code == 200:
+                    log.info("merged_pr_successfully", extra={"owner": owner, "repo": repo, "pr": pr, "method": method})
+                    return True
+                log.warning("merge_pr with method %s returned HTTP %s: %s", method, resp.status_code, resp.text)
+            except Exception as exc:
+                log.warning("failed to merge PR %s/%s#%s with method %s: %s", owner, repo, pr, method, exc)
+        return False
+
     async def fetch_pr_head(self, owner: str, repo: str, pr: int) -> str:
         url = f"{self._base}/repos/{owner}/{repo}/pulls/{pr}"
         data = await self._retryable(lambda: self._client.get(url, headers=self._headers()))

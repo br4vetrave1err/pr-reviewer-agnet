@@ -19,7 +19,7 @@ The system is a long-running Docker service. Webhook events enter through a sign
 
 | SYS ID | Name | Description | Parent Requirements | Type |
 |--------|------|-------------|---------------------|------|
-| SYS-001 | Webhook Receiver | HTTPS endpoint `/api/webhook`; verifies `X-Hub-Signature-256` HMAC; ACKs within 2s and hands payloads to the pipeline asynchronously. Exposes `POST /api/reviews/{run_id}/approve` API approval endpoint. | REQ-001, REQ-021, REQ-IF-002, REQ-NF-002 | Service |
+| SYS-001 | Webhook Receiver | HTTPS endpoint `/api/webhook`; verifies `X-Hub-Signature-256` HMAC; ACKs within 2s and hands payloads to the pipeline asynchronously. Exposes `POST /api/reviews/{run_id}/approve` API approval endpoint and `POST /api/slack/events` / `POST /api/slack/interactivity` 2-way Slack endpoints. | REQ-001, REQ-021, REQ-025, REQ-IF-002, REQ-NF-002 | Service |
 | SYS-002 | Trigger Filter | Decides whether a PR or CI completion warrants review: self-account is author (`opened`/`ready_for_review`/`synchronize` incl. self-authored Draft PRs), requested reviewer, or `@review` / `@review approve` command; applies `repo_config` + denylist; logs skips. | REQ-001, REQ-002, REQ-003, REQ-018, REQ-021 | Module |
 | SYS-003 | Review Coordinator | Owns the queue, concurrency 1, CI-gate wait (`pending_ci`), staged review preview gate (`pending_approval`), dedup per (repo, PR, head SHA, model), re-review on new SHA, stale review invalidation on push / 24h expiration, retry with backoff, idempotency-marker checks, partial-report handling, and the reconcile sweep. | REQ-004, REQ-010, REQ-014, REQ-020, REQ-023, REQ-NF-005, REQ-NF-006 | Subsystem |
 | SYS-004 | Repo Clone Cache | Isolated per-repo clone workspace inside container (`workspace_cache_dir`); plain `git clone` over HTTPS using the PAT, incremental fetch to head, and LRU eviction. | REQ-005 | Library |
@@ -32,7 +32,7 @@ The system is a long-running Docker service. Webhook events enter through a sign
 | SYS-011 | Comment Command Interpreter | Parses PR comment commands (`@review --model <alias>`, `@review approve`); validates aliases; replies with help on unknown/malformed commands. | REQ-013, REQ-021 | Module |
 | SYS-012 | State Store | SQLite database implementing the documented schema (`review_runs`, `repos`, `model_aliases`, `repo_config`); transactional dedup and crash recovery. | REQ-IF-005, REQ-NF-005 | Library |
 | SYS-013 | Config Manager | Loads and validates `config.yaml` (providers, `repo_config`, denylist, defaults, concurrency, CI-gate settings, retry policy, docs location, agent skill set); exposes typed access. | REQ-IF-004, REQ-016, REQ-CN-001 | Library |
-| SYS-014 | Runtime & Observability | Process lifecycle (graceful shutdown, restart-safe recovery), structured JSON logs, Slack Block Kit webhook notifications (`SLACK_WEBHOOK_URL`), persisted run records, GitHub rate-limit handling, secret hygiene, and read-only enforcement. | REQ-015, REQ-019, REQ-NF-001, REQ-NF-003, REQ-NF-004, REQ-NF-007, REQ-CN-002, REQ-CN-004 | Subsystem |
+| SYS-014 | Runtime & Observability | Process lifecycle (graceful shutdown, restart-safe recovery), dynamic ngrok URL discovery & webhook auto-registration, structured JSON logs, Slack Block Kit webhook & 2-way event notifications (`SLACK_WEBHOOK_URL`), persisted run records, GitHub rate-limit handling, secret hygiene, and read-only enforcement. | REQ-015, REQ-019, REQ-024, REQ-025, REQ-NF-001, REQ-NF-003, REQ-NF-004, REQ-NF-007, REQ-CN-002, REQ-CN-004 | Subsystem |
 
 ## Dependency View (IEEE 1016 §5.2)
 

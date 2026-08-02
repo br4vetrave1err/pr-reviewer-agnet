@@ -1,4 +1,4 @@
-﻿# Implements: MOD-001, ARCH-001, SYS-001, REQ-001
+# Implements: MOD-001, ARCH-001, SYS-001, REQ-001
 """Webhook dispatcher (MOD-001).
 
 Routes a signature-validated, normalized event to the trigger filter and the
@@ -34,8 +34,8 @@ class Dispatcher:
 
         if decision.action in {"enqueue", "advance-ci"}:
             self._queue.enqueue(decision, cause="webhook")
-        elif decision.action == "reply":
+        elif decision.action in {"reply", "notify-merged"}:
             if self._reply_post is not None:
                 await self._reply_post(decision)
             else:
-                log.info("reply decision dropped: no reply poster configured")
+                log.info("reply/notify decision dropped: no poster configured")

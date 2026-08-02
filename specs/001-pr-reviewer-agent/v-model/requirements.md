@@ -38,6 +38,10 @@ A continuously-running Docker service that acts as a PR review agent for a singl
 | REQ-021 | The system SHALL support dual-channel approval for staged reviews via a GitHub PR comment (`@review approve`) OR an HTTP API endpoint (`POST /api/reviews/{run_id}/approve`). | P1 | Flexible approval mechanism. | Test |
 | REQ-022 | Upon user approval of a staged review for a self-authored Draft PR, the system SHALL submit the GitHub PR review with `event: APPROVE` AND convert/mark the Draft PR as `ready_for_review` via the GitHub API. | P1 | Auto-approval and ready-for-review promotion workflow. | Test |
 | REQ-023 | The system SHALL automatically cancel/invalidate a `pending_approval` review when a new `synchronize` commit is pushed to the PR, and SHALL expire unapproved staged reviews after 24 hours. | P2 | Prevents stale review posting on updated commits. | Test |
+| REQ-024 | The system SHALL query ngrok local management API (`http://localhost:4040/api/tunnels`) on startup and URL change events to dynamically discover the public tunnel URL and update registered webhooks (GitHub & Slack) without requiring manual configuration. | P1 | Dynamic webhook auto-subscription for local Docker & tunnel setups. | Test |
+| REQ-025 | The system SHALL provide a 2-way Slack integration endpoint (`POST /api/slack/events` & `POST /api/slack/interactivity`) supporting Slack `url_verification`, `app_mention` commands (e.g. `@PR-Reviewer review #1`), and Block Kit button interactivity payloads. | P1 | 2-way Slack communication channel. | Test |
+
+
 
 ### Non-Functional Requirements
 

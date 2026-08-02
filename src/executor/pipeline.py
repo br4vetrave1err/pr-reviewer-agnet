@@ -125,12 +125,19 @@ class ReviewPipeline:
 
         return findings[: 100]
 
-    async def publish_approved_review(self, job: ReviewJob, summary: str, findings: list[Finding], is_draft: bool = False) -> None:
-        """REQ-021, REQ-022: Publish approved review and promote Draft PRs on GitHub."""
+    async def publish_approved_review(self, job: ReviewJob, summary: str, findings: list[Finding], is_draft: bool = False, auto_merge: bool = True) -> None:
+        """REQ-021, REQ-022: Publish approved review, promote Draft PRs, and auto-merge PR on GitHub."""
         event = "APPROVE" if is_draft else "COMMENT"
         await self._publish(job, summary, findings, event=event)
         if is_draft:
             await self._github.mark_pr_ready_for_review(job.owner, job.repo, job.pr)  # REQ-022
+        merged = False
+        if auto_merge:
+            merged = await self._github.merge_pr(job.owner, job.repo, job.pr)
+        if self._slack:
+            await self._slack.notify_review_approved_and_promoted(
+                run_id=job.run_id, owner=job.owner, repo=job.repo, pr=job.pr, is_draft=is_draft, merged=merged
+            )
 
     async def _publish(self, job: ReviewJob, summary: str, findings: list[Finding], event: str = "COMMENT") -> None:
         inline = [

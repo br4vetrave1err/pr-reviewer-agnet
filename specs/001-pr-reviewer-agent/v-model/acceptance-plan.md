@@ -666,17 +666,48 @@ This document defines the Acceptance Test Plan for the GitHub PR Review Agent. E
 
 ---
 
+### Requirement Validation: REQ-024 (Dynamic Ngrok Webhook Auto-Registration)
+
+#### Test Case: ATP-024-A (Ngrok URL discovery and webhook sync)
+
+**Description:** Agent queries ngrok API on startup and updates registered webhook endpoints automatically.
+
+* **User Scenario: SCN-024-A1**
+  * **Given** ngrok tunnel is active at `http://localhost:4040/api/tunnels`
+  * **When** the agent starts up or detects tunnel reconnect
+  * **Then** the agent fetches the public HTTPS URL and registers/updates GitHub and Slack webhook subscriptions
+
+---
+
+### Requirement Validation: REQ-025 (2-Way Slack Integration Endpoint)
+
+#### Test Case: ATP-025-A (Slack events, verification, and interactive commands)
+
+**Description:** Agent processes Slack `url_verification`, `app_mention` commands, and interactive button clicks.
+
+* **User Scenario: SCN-025-A1**
+  * **Given** Slack sends a `url_verification` request to `/api/slack/events`
+  * **When** the payload contains a challenge token
+  * **Then** the system responds with JSON `{"challenge": "..."}` HTTP 200
+* **User Scenario: SCN-025-A2**
+  * **Given** a user posts `@PR-Reviewer review #1` in a Slack channel
+  * **When** Slack sends an `app_mention` event to `/api/slack/events`
+  * **Then** the agent parses the command and enqueues a PR review job
+
+---
+
 ## Coverage Summary
 
 | Metric | Count |
 |--------|-------|
-| Total Requirements (REQ) | 40 (40 active, 0 deprecated) |
-| Total Test Cases (ATP) | 41 (41 active, 0 deprecated, 0 suspect) |
-| Total Scenarios (SCN) | 71 |
-| Active Requirements with ≥1 ATP | 40 / 40 (100%) |
-| Test Cases with ≥1 SCN | 41 / 41 (100%) |
+| Total Requirements (REQ) | 42 (42 active, 0 deprecated) |
+| Total Test Cases (ATP) | 43 (43 active, 0 deprecated, 0 suspect) |
+| Total Scenarios (SCN) | 74 |
+| Active Requirements with ≥1 ATP | 42 / 42 (100%) |
+| Test Cases with ≥1 SCN | 43 / 43 (100%) |
 | **Overall Coverage** | **100%** (active items only) |
 
 ## Uncovered Requirements
 
 None — full coverage achieved.
+

@@ -70,7 +70,15 @@ class TriggerDecisionEngine:
                 target=Command(kind="advance-ci", model=None),
             )
 
-        if event.pr_state in {"closed", "merged"}:
+        if event.event == "pull_request" and (event.action == "closed" or event.pr_state in {"closed", "merged"}):
+            if event.pr_state == "merged" or event.action == "closed":
+                return Decision(
+                    action="notify-merged",
+                    owner=event.owner,
+                    repo=event.repo,
+                    pr=event.pr_number,
+                    head=event.head_sha,
+                )
             return Decision(action="skip", reason="not-open")
 
         if event.draft and self._self_account and event.author != self._self_account:
