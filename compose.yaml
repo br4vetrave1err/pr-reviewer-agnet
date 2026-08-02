@@ -47,6 +47,8 @@ services:
       - ./docker/ngrok.yml:/etc/ngrok.yml:ro
     depends_on:
       - app
+    ports:
+      - "127.0.0.1:4040:4040"
     restart: unless-stopped
 
 volumes:
